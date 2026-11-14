@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#4f46e5">
+  <!-- 苹果 PWA 沉浸式独立 App 配置 -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="多账户记账">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <link rel="apple-touch-icon" href="./icon.svg">
+
+  <title>多账户记账工具</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- FontAwesome 图标库 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    
+    header {
+      padding-top: env(safe-area-inset-top);
+    }
+    
+    .pb-safe {
+      padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    }
+
+    .floating-action-btn-container {
+      bottom: calc(4rem + env(safe-area-inset-bottom));
+    }
+
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans antialiased min-h-screen flex flex-col justify-between">
+
+  <!-- 顶部 App Bar -->
+  <header class="bg-indigo-600 text-white sticky top-0 z-20 shadow-md">
+    <div class="max-w-md mx-auto px-4 py-3 space-y-2">
+      <!-- 上层：标题与数据导入/导出操作栏 -->
+      <div class="flex justify-between items-center">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-wallet text-xl text-indigo-200"></i>
+          <h1 class="text-base font-bold tracking-tight">多账户记账</h1>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="file" id="importFileInput" accept="application/json,.json" class="hidden" onchange="importData(event)">
+          <button onclick="document.getElementById('importFileInput').click()" class="p-1.5 bg-indigo-500 hover:bg-indigo-700 rounded-lg text-xs flex items-center gap-1 transition" title="导入备份数据">
+            <i class="fa-solid fa-file-import"></i> 导入
+          </button>
+          <button onclick="exportData()" class="p-1.5 bg-indigo-500 hover:bg-indigo-700 rounded-lg text-xs flex items-center gap-1 transition" title="导出备份数据">
+            <i class="fa-solid fa-file-export"></i> 导出
+          </button>
+        </div>
+      </div>
+
+      <!-- 下层：主账户直接切换标签栏 -->
+      <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pt-1 pb-0.5" id="mainAccountTabs">
+        <!-- 动态渲染主账户切换按钮 -->
+      </div>
+    </div>
+  </header>
+
+  <!-- 主体视图区域 -->
+  <main class="flex-1 max-w-md w-full mx-auto p-4 pb-28 space-y-4">
+    
+    <!-- Tab 1: 概览视图 -->
+    <section id="tab-overview" class="tab-content space-y-4">
+      <!-- 资产概览卡片 -->
+      <div class="bg-gradient-to-br from-indigo-600 to-indigo-800 text-white rounded-2xl p-5 shadow-lg relative overflow-hidden">
+        <div class="absolute -right-4 -bottom-4 text-indigo-500 opacity-20 text-9xl pointer-events-none">
+          <i class="fa-solid fa-vault"></i>
+        </div>
+        <div class="text-xs text-indigo-200">当前主账户总资产</div>
+        <div class="text-3xl font-extrabold mt-1 tracking-tight" id="totalBalance">¥ 0.00</div>
+        
+        <div class="grid grid-cols-2 gap-4 mt-6 pt-4 border-t border-indigo-500/40">
+          <div>
+            <div class="text-xs text-indigo-200 flex items-center gap-1">
+              <i class="fa-solid fa-arrow-down text-emerald-300"></i> 累计总收入
+            </div>
+            <div class="text-lg font-bold text-emerald-300 mt-0.5" id="totalIncome">¥ 0.00</div>
+          </div>
+          <div>
+            <div class="text-xs text-indigo-200 flex items-center gap-1">
+              <i class="fa-solid fa-arrow-up text-rose-300"></i> 累计总支出
+            </div>
+            <div class="text-lg font-bold text-rose-300 mt-0.5" id="totalExpense">¥ 0.00</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 子账户列表与管理 -->
+      <div>
+        <div class="flex justify-between items-center mb-2">
+          <div class="flex items-center gap-2">
+            <h3 class="font-bold text-slate-700 text-sm">子账户资金分布</h3>
+            <!-- 优化 4：排序按钮 -->
+            <button onclick="toggleSubAccountSort()" class="text-[11px] text-slate-500 bg-slate-200/70 hover:bg-slate-200 px-2 py-0.5 rounded-md flex items-center gap-1 transition">
+              <i class="fa-solid fa-sort text-[10px]"></i> <span id="sortSubAccountLabel">默认</span>
+            </button>
+          </div>
+          <button onclick="openSubAccountModal()" class="text-xs text-indigo-600 font-medium flex items-center gap-1 bg-indigo-50 px-2.5 py-1 rounded-lg hover:bg-indigo-100">
+            <i class="fa-solid fa-plus"></i> 新增子账户
+          </button>
+        </div>
+        <div id="subAccountOverviewList" class="space-y-2">
+          <!-- 动态渲染子账户卡片 -->
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 2: 流水明细视图 -->
+    <section id="tab-transactions" class="tab-content hidden space-y-3">
+      <!-- 组合筛选栏 -->
+      <div class="grid grid-cols-3 gap-2">
+        <select id="filterSubAccount" onchange="renderTransactions()" class="bg-white border border-slate-200 text-slate-700 text-xs rounded-xl p-2 outline-none focus:border-indigo-500">
+          <option value="ALL">全部子账户</option>
+        </select>
+        <select id="filterType" onchange="renderTransactions()" class="bg-white border border-slate-200 text-slate-700 text-xs rounded-xl p-2 outline-none focus:border-indigo-500">
+          <option value="ALL">全部收支</option>
+          <option value="expense">仅看支出</option>
+          <option value="income">仅看收入</option>
+        </select>
+        <select id="filterTime" onchange="renderTransactions()" class="bg-white border border-slate-200 text-slate-700 text-xs rounded-xl p-2 outline-none focus:border-indigo-500">
+          <option value="ALL">全部时间</option>
+          <option value="1M">近1个月</option>
+          <option value="3M">近3个月</option>
+          <option value="6M">近6个月</option>
+          <option value="1Y">近1年</option>
+        </select>
+      </div>
+
+      <!-- 流水列表 -->
+      <div id="transactionList" class="space-y-2">
+        <!-- 动态生成流水项目 -->
+      </div>
+    </section>
+
+    <!-- Tab 3: 统计分析视图 -->
+    <section id="tab-statistics" class="tab-content hidden space-y-4">
+      <!-- 控制栏：收支切换 & 时间维度选框 -->
+      <div class="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm space-y-3">
+        <!-- 支出/收入切换 -->
+        <div class="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl text-center text-xs font-medium">
+          <button id="statTypeExpenseBtn" onclick="setStatType('expense')" class="py-1.5 rounded-lg bg-rose-500 text-white shadow-sm transition">支出分析</button>
+          <button id="statTypeIncomeBtn" onclick="setStatType('income')" class="py-1.5 rounded-lg text-slate-600 transition">收入分析</button>
+        </div>
+
+        <!-- 时间维度按钮 -->
+        <div class="flex justify-between items-center text-xs bg-slate-50 p-1 rounded-xl">
+          <button onclick="setStatTimeRange('1M')" id="statTime-1M" class="stat-time-btn flex-1 py-1 text-center rounded-lg font-medium text-slate-600">1个月</button>
+          <button onclick="setStatTimeRange('3M')" id="statTime-3M" class="stat-time-btn flex-1 py-1 text-center rounded-lg font-medium text-slate-600">3个月</button>
+          <button onclick="setStatTimeRange('6M')" id="statTime-6M" class="stat-time-btn flex-1 py-1 text-center rounded-lg font-medium text-slate-600">6个月</button>
+          <button onclick="setStatTimeRange('1Y')" id="statTime-1Y" class="stat-time-btn flex-1 py-1 text-center rounded-lg font-medium text-slate-600">1年内</button>
+          <button onclick="setStatTimeRange('ALL')" id="statTime-ALL" class="stat-time-btn flex-1 py-1 text-center rounded-lg font-medium text-slate-600">全部</button>
+        </div>
+      </div>
+
+      <!-- 统计卡片摘要 -->
+      <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex justify-between items-center">
+        <div>
+          <div class="text-xs text-slate-400" id="statSummaryTitle">所选区间总支出</div>
+          <div class="text-2xl font-black text-slate-800 mt-1" id="statSummaryAmount">¥ 0.00</div>
+        </div>
+        <div class="text-right">
+          <div class="text-xs text-slate-400">计入笔数</div>
+          <div class="text-lg font-bold text-indigo-600 mt-1" id="statSummaryCount">0 笔</div>
+        </div>
+      </div>
+
+      <!-- 分类占比分析图表 -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-3">
+        <h3 class="font-bold text-slate-700 text-sm flex items-center gap-2">
+          <i class="fa-solid fa-chart-pie text-indigo-500"></i> 分类分布占比
+        </h3>
+        <div class="h-52 relative flex justify-center items-center">
+          <canvas id="categoryChart"></canvas>
+        </div>
+        <!-- 分类详细列表 -->
+        <div id="categoryBreakdownList" class="space-y-2 pt-2 border-t border-slate-100">
+          <!-- 动态渲染分类占比和金额 -->
+        </div>
+      </div>
+
+      <!-- 子账户收支分布图表 -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-3">
+        <h3 class="font-bold text-slate-700 text-sm flex items-center gap-2">
+          <i class="fa-solid fa-chart-simple text-indigo-500"></i> 各子账户占比
+        </h3>
+        <div class="h-48 relative flex justify-center items-center">
+          <canvas id="subAccountChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 底部悬浮快捷记账按钮 -->
+  <div class="fixed left-0 right-0 z-10 pointer-events-none floating-action-btn-container transition-all">
+    <div class="max-w-md mx-auto px-4 flex justify-center">
+      <button onclick="openTransactionModal()" class="pointer-events-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-full shadow-lg shadow-indigo-300 flex items-center gap-2 transform active:scale-95 transition">
+        <i class="fa-solid fa-pen-to-square"></i>
+        <span>记一笔</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 底部导航栏 -->
+  <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-10 pb-safe">
+    <div class="max-w-md mx-auto flex justify-around py-2">
+      <button onclick="switchTab('overview')" id="nav-overview" class="flex flex-col items-center gap-1 text-indigo-600">
+        <i class="fa-solid fa-house text-lg"></i>
+        <span class="text-[10px]">概览分析</span>
+      </button>
+      <button onclick="switchTab('transactions')" id="nav-transactions" class="flex flex-col items-center gap-1 text-slate-400">
+        <i class="fa-solid fa-list-ul text-lg"></i>
+        <span class="text-[10px]">流水明细</span>
+      </button>
+      <button onclick="switchTab('statistics')" id="nav-statistics" class="flex flex-col items-center gap-1 text-slate-400">
+        <i class="fa-solid fa-chart-pie text-lg"></i>
+        <span class="text-[10px]">统计分析</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- 模态框：记一笔 / 编辑流水 -->
+  <div id="modalTransaction" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center">
+    <div class="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="font-bold text-slate-800" id="txModalTitle">记一笔</h3>
+        <button onclick="closeModal('modalTransaction')" class="text-slate-400 text-lg"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="formTransaction" onsubmit="saveTransaction(event)" class="space-y-3">
+        <!-- 收支类型切换 -->
+        <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl text-center text-sm font-medium">
+          <label class="cursor-pointer">
+            <input type="radio" name="txType" value="expense" checked class="peer hidden" onchange="updateCategoryOptions()">
+            <div class="py-2 rounded-lg peer-checked:bg-rose-500 peer-checked:text-white text-slate-600 transition">支出</div>
+          </label>
+          <label class="cursor-pointer">
+            <input type="radio" name="txType" value="income" class="peer hidden" onchange="updateCategoryOptions()">
+            <div class="py-2 rounded-lg peer-checked:bg-emerald-500 peer-checked:text-white text-slate-600 transition">收入</div>
+          </label>
+        </div>
+
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">金额</label>
+          <input type="number" step="0.01" id="txAmount" required placeholder="0.00" class="w-full border border-slate-200 rounded-xl p-2.5 text-xl font-bold text-slate-800 outline-none focus:border-indigo-500">
+        </div>
+
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">选择子账户</label>
+          <select id="txSubAccount" required class="w-full border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500"></select>
+        </div>
+
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <label class="block text-xs text-slate-500">分类</label>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="deleteCategoryPrompt()" class="text-xs text-rose-500 font-medium hover:underline">删除分类</button>
+              <button type="button" onclick="addNewCategoryPrompt()" class="text-xs text-indigo-600 font-medium hover:underline">+ 新增分类</button>
+            </div>
+          </div>
+          <select id="txCategory" onchange="handleCategorySelectChange(this)" required class="w-full border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500"></select>
+        </div>
+
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">日期与时间</label>
+          <input type="datetime-local" id="txDateTime" required class="w-full border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500">
+        </div>
+
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">备注信息</label>
+          <input type="text" id="txNote" placeholder="例如：买图书、班费、餐饮等" class="w-full border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500">
+        </div>
+
+        <button type="submit" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl shadow-md hover:bg-indigo-700 transition mt-2">保存记录</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 模态框：新增/编辑主账户 -->
+  <div id="modalMainAccount" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-2xl p-5 space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="font-bold text-slate-800" id="mainAccountModalTitle">新建主账户</h3>
+        <button onclick="closeModal('modalMainAccount')" class="text-slate-400 text-lg"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form onsubmit="saveMainAccount(event)" class="space-y-3">
+        <input type="hidden" id="mainAccountIdInput">
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">主账户名称</label>
+          <input type="text" id="mainAccountNameInput" required placeholder="如：班级基金、家庭账本" class="w-full border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500">
+        </div>
+        <div class="flex gap-2">
+          <button type="button" id="deleteMainAccountBtn" onclick="deleteMainAccountFromModal()" class="hidden w-1/3 bg-rose-50 text-rose-600 font-bold py-2.5 rounded-xl border border-rose-200 hover:bg-rose-100 transition">删除</button>
+          <button type="submit" id="saveMainAccountBtn" class="flex-1 bg-indigo-600 text-white font-bold py-2.5 rounded-xl shadow-md hover:bg-indigo-700 transition">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 模态框：新增/编辑子账户 -->
+  <div id="modalSubAccount" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-2xl p-5 space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="font-bold text-slate-800" id="subAccountModalTitle">新增子账户</h3>
+        <button onclick="closeModal('modalSubAccount')" class="text-slate-400 text-lg"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form onsubmit="saveSubAccount(event)" class="space-y-3">
+        <input type="hidden" id="subAccountIdInput">
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">子账户名称</label>
+          <input type="text" id="subAccountNameInput" required placeholder="如：一班、支付宝" class="w-full border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">初始资金账户金额 (元)</label>
+          <input type="number" step="0.01" id="subAccountBalanceInput" required placeholder="0.00" class="w-full border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500">
+        </div>
+        <button type="submit" class="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl shadow-md hover:bg-indigo-700 transition">保存子账户</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // --- 默认数据结构（已改造为独立主账户分类） ---
+    const DEFAULT_DATA = {
+      activeMainAccountId: 'ma_school',
+      mainAccounts: [
+        {
+          id: 'ma_school',
+          name: '学校账户',
+          customCategories: {
+            expense: ['办公用品', '餐饮食品'],
+            income: ['班费缴纳']
+          },
+          subAccounts: [
+            { id: 'sa_class1', name: '一班', initialBalance: 2000 },
+            { id: 'sa_class2', name: '二班', initialBalance: 1500 },
+            { id: 'sa_class3', name: '三班', initialBalance: 1800 },
+            { id: 'sa_canteen', name: '食堂', initialBalance: 5000 }
+          ]
+        },
+        {
+          id: 'ma_personal',
+          name: '个人账户',
+          customCategories: {
+            expense: ['餐饮食品', '交通出行', '日常购物'],
+            income: ['工资薪酬', '理财收益']
+          },
+          subAccounts: [
+            { id: 'sa_alipay', name: '支付宝', initialBalance: 3200 },
+            { id: 'sa_wechat', name: '微信', initialBalance: 1200 },
+            { id: 'sa_bank', name: '银行卡', initialBalance: 25000 }
+          ]
+        }
+      ],
+      transactions: [
+        { id: 'tx_1', mainAccountId: 'ma_school', subAccountId: 'sa_class1', type: 'expense', amount: 150, category: '办公用品', datetime: getNowISO(0), note: '购买打印纸与班级耗材' },
+        { id: 'tx_2', mainAccountId: 'ma_school', subAccountId: 'sa_canteen', type: 'income', amount: 800, category: '班费缴纳', datetime: getNowISO(-5), note: '食材补给返还' },
+        { id: 'tx_3', mainAccountId: 'ma_personal', subAccountId: 'sa_alipay', type: 'expense', amount: 45, category: '餐饮食品', datetime: getNowISO(0), note: '午餐外卖' }
+      ]
+    };
+
+    let appData = loadData();
+    let currentTab = 'overview';
+    let editingTxId = null; // 当前正在编辑的流水 ID
+
+    // 子账户资金分布排序状态 ('default' | 'desc' | 'asc')
+    let subAccountSortOrder = 'default';
+
+    // 统计分析内部状态
+    let statType = 'expense'; 
+    let statTimeRange = 'ALL'; 
+
+    let categoryChartInstance = null;
+    let subAccountChartInstance = null;
+
+    // --- 数据持久化与平滑升级兼容 ---
+    function loadData() {
+      const saved = localStorage.getItem('multi_account_bookkeeping_data');
+      const data = saved ? JSON.parse(saved) : DEFAULT_DATA;
+      
+      // 兼容历史数据升级：确保每个主账户都有独立的 customCategories 容器
+      if (data.mainAccounts) {
+        data.mainAccounts.forEach(ma => {
+          if (!ma.customCategories) {
+            ma.customCategories = (data.customCategories) 
+              ? JSON.parse(JSON.stringify(data.customCategories))
+              : { expense: ['餐饮食品'], income: ['日常收入'] };
+          }
+        });
+      }
+      return data;
+    }
+
+    function saveData() {
+      localStorage.setItem('multi_account_bookkeeping_data', JSON.stringify(appData));
+      renderAll();
+    }
+
+    function getNowISO(dayOffset = 0) {
+      const now = new Date();
+      now.setDate(now.getDate() + dayOffset);
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      return now.toISOString().slice(0, 16);
+    }
+
+    function isWithinTimeRange(datetimeStr, rangeKey) {
+      if (rangeKey === 'ALL') return true;
+      const txDate = new Date(datetimeStr);
+      const now = new Date();
+      const diffDays = (now - txDate) / (1000 * 60 * 60 * 24);
+
+      if (rangeKey === '1M') return diffDays <= 30;
+      if (rangeKey === '3M') return diffDays <= 90;
+      if (rangeKey === '6M') return diffDays <= 180;
+      if (rangeKey === '1Y') return diffDays <= 365;
+      return true;
+    }
+
+    // --- 初始化 ---
+    document.addEventListener('DOMContentLoaded', () => {
+      renderAll();
+    });
+
+    function renderAll() {
+      renderMainAccountTabs();
+      renderOverview();
+      renderTransactions();
+      if (currentTab === 'statistics') {
+        renderStatistics();
+      }
+    }
+
+    function getActiveMainAccount() {
+      return appData.mainAccounts.find(ma => ma.id === appData.activeMainAccountId) || appData.mainAccounts[0];
+    }
+
+    // 获取当前主账户独立拥有的自定义分类
+    function getMergedCategories(type) {
+      const ma = getActiveMainAccount();
+      if (ma && ma.customCategories && ma.customCategories[type]) {
+        return ma.customCategories[type];
+      }
+      return [];
+    }
+
+    // --- 顶部主账户标签栏 ---
+    function renderMainAccountTabs() {
+      const container = document.getElementById('mainAccountTabs');
+      let html = appData.mainAccounts.map(ma => {
+        const isActive = ma.id === appData.activeMainAccountId;
+        if (isActive) {
+          return `
+            <div class="flex items-center bg-white text-indigo-700 rounded-lg px-2.5 py-1 text-xs font-semibold shadow flex-shrink-0 gap-1.5">
+              <span onclick="switchMainAccount('${ma.id}')" class="cursor-pointer">${ma.name}</span>
+              <button onclick="openMainAccountModal('${ma.id}')" class="text-indigo-400 hover:text-indigo-700 transition" title="编辑主账户">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+            </div>
+          `;
+        } else {
+          return `
+            <button onclick="switchMainAccount('${ma.id}')" class="px-3 py-1 rounded-lg text-xs font-semibold flex-shrink-0 transition bg-indigo-500/60 text-indigo-100 hover:bg-indigo-500">
+              ${ma.name}
+            </button>
+          `;
+        }
+      }).join('');
+
+      html += `
+        <button onclick="openMainAccountModal()" class="px-2 py-1 bg-indigo-500/40 hover:bg-indigo-500 text-indigo-100 rounded-lg text-xs flex-shrink-0 flex items-center gap-1">
+          <i class="fa-solid fa-plus"></i> 新建账户
+        </button>
+      `;
+
+      container.innerHTML = html;
+    }
+
+    function switchMainAccount(id) {
+      appData.activeMainAccountId = id;
+      saveData();
+    }
+
+    // --- Tab 切换 ---
+    function switchTab(tabName) {
+      currentTab = tabName;
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+
+      ['overview', 'transactions', 'statistics'].forEach(t => {
+        const btn = document.getElementById(`nav-${t}`);
+        if (t === tabName) {
+          btn.className = 'flex flex-col items-center gap-1 text-indigo-600';
+        } else {
+          btn.className = 'flex flex-col items-center gap-1 text-slate-400';
+        }
+      });
+
+      if (tabName === 'statistics') {
+        renderStatistics();
+      }
+    }
+
+    // --- 优化 4：切换子账户资金排序 ---
+    function toggleSubAccountSort() {
+      if (subAccountSortOrder === 'default') {
+        subAccountSortOrder = 'desc';
+      } else if (subAccountSortOrder === 'desc') {
+        subAccountSortOrder = 'asc';
+      } else {
+        subAccountSortOrder = 'default';
+      }
+      renderOverview();
+    }
+
+    // --- 优化 5：点击子账户直接跳转查看该账户明细 ---
+    function viewSubAccountTransactions(subAccountId) {
+      document.getElementById('filterSubAccount').value = subAccountId;
+      switchTab('transactions');
+      renderTransactions();
+    }
+
+    // --- Tab 1: 概览计算 ---
+    function renderOverview() {
+      const mainAcc = getActiveMainAccount();
+      if (!mainAcc) return;
+
+      // 更新排序状态按钮的文案
+      const sortLabel = document.getElementById('sortSubAccountLabel');
+      if (sortLabel) {
+        if (subAccountSortOrder === 'desc') sortLabel.innerText = '金额从高到低';
+        else if (subAccountSortOrder === 'asc') sortLabel.innerText = '金额从低到高';
+        else sortLabel.innerText = '默认';
+      }
+
+      const subBalances = {};
+      mainAcc.subAccounts.forEach(sa => {
+        subBalances[sa.id] = sa.initialBalance;
+      });
+
+      let totalIncome = 0;
+      let totalExpense = 0;
+
+      appData.transactions
+        .filter(tx => tx.mainAccountId === mainAcc.id)
+        .forEach(tx => {
+          if (subBalances[tx.subAccountId] !== undefined) {
+            if (tx.type === 'income') {
+              subBalances[tx.subAccountId] += Number(tx.amount);
+              totalIncome += Number(tx.amount);
+            } else {
+              subBalances[tx.subAccountId] -= Number(tx.amount);
+              totalExpense += Number(tx.amount);
+            }
+          }
+        });
+
+      const totalBalance = Object.values(subBalances).reduce((a, b) => a + b, 0);
+
+      document.getElementById('totalBalance').innerText = `¥ ${totalBalance.toFixed(2)}`;
+      document.getElementById('totalIncome').innerText = `¥ ${totalIncome.toFixed(2)}`;
+      document.getElementById('totalExpense').innerText = `¥ ${totalExpense.toFixed(2)}`;
+
+      const subContainer = document.getElementById('subAccountOverviewList');
+      if (mainAcc.subAccounts.length === 0) {
+        subContainer.innerHTML = `<div class="bg-white p-4 text-center text-xs text-slate-400 rounded-xl">暂无子账户，请点击上方增加</div>`;
+        return;
+      }
+
+      // 排序逻辑
+      let subAccountsList = [...mainAcc.subAccounts];
+      if (subAccountSortOrder === 'desc') {
+        subAccountsList.sort((a, b) => (subBalances[b.id] || 0) - (subBalances[a.id] || 0));
+      } else if (subAccountSortOrder === 'asc') {
+        subAccountsList.sort((a, b) => (subBalances[a.id] || 0) - (subBalances[b.id] || 0));
+      }
+
+      subContainer.innerHTML = subAccountsList.map(sa => `
+        <div onclick="viewSubAccountTransactions('${sa.id}')" class="bg-white p-3.5 rounded-xl border border-slate-100 flex justify-between items-center shadow-sm cursor-pointer hover:border-indigo-200 transition">
+          <div>
+            <div class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+              ${sa.name}
+              <i class="fa-solid fa-chevron-right text-[10px] text-slate-300"></i>
+            </div>
+          </div>
+          <div class="flex items-center gap-3" onclick="event.stopPropagation()">
+            <div class="text-right">
+              <div class="text-xs text-slate-400">当前余额</div>
+              <div class="text-sm font-extrabold text-slate-800">¥ ${(subBalances[sa.id] || 0).toFixed(2)}</div>
+            </div>
+            <div class="flex gap-1 border-l pl-2">
+              <button onclick="openSubAccountModal('${sa.id}')" class="p-1.5 text-xs text-slate-400 hover:text-indigo-600" title="编辑"><i class="fa-solid fa-pen"></i></button>
+              <button onclick="deleteSubAccount('${sa.id}')" class="p-1.5 text-xs text-slate-400 hover:text-rose-500" title="删除"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // --- Tab 2: 流水明细 ---
+    function renderTransactions() {
+      const mainAcc = getActiveMainAccount();
+      const subSelect = document.getElementById('filterSubAccount');
+      const currentSelected = subSelect.value;
+      
+      subSelect.innerHTML = '<option value="ALL">全部子账户</option>' + 
+        mainAcc.subAccounts.map(sa => `<option value="${sa.id}">${sa.name}</option>`).join('');
+      
+      if (Array.from(subSelect.options).some(opt => opt.value === currentSelected)) {
+        subSelect.value = currentSelected;
+      } else {
+        subSelect.value = 'ALL';
+      }
+
+      const filterSub = subSelect.value;
+      const filterType = document.getElementById('filterType').value;
+      const filterTime = document.getElementById('filterTime').value;
+
+      let list = appData.transactions.filter(tx => tx.mainAccountId === mainAcc.id);
+
+      if (filterSub !== 'ALL') list = list.filter(tx => tx.subAccountId === filterSub);
+      if (filterType !== 'ALL') list = list.filter(tx => tx.type === filterType);
+      if (filterTime !== 'ALL') list = list.filter(tx => isWithinTimeRange(tx.datetime, filterTime));
+
+      list.sort((a, b) => new Date(b.datetime) - new Date(a.datetime));
+
+      const container = document.getElementById('transactionList');
+      if (list.length === 0) {
+        container.innerHTML = `<div class="text-center py-10 text-xs text-slate-400">暂无符合条件的流水记录</div>`;
+        return;
+      }
+
+      container.innerHTML = list.map(tx => {
+        const subAcc = mainAcc.subAccounts.find(sa => sa.id === tx.subAccountId);
+        const isExpense = tx.type === 'expense';
+        return `
+          <div class="bg-white p-3.5 rounded-xl border border-slate-100 flex justify-between items-center shadow-sm">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm ${isExpense ? 'bg-rose-50 text-rose-500' : 'bg-emerald-50 text-emerald-500'}">
+                <i class="fa-solid ${isExpense ? 'fa-minus' : 'fa-plus'}"></i>
+              </div>
+              <div>
+                <div class="text-sm font-bold text-slate-800">${tx.category} <span class="text-xs font-normal text-slate-400">(${subAcc ? subAcc.name : '未知'})</span></div>
+                <div class="text-[11px] text-slate-400 mt-0.5">${tx.datetime.replace('T', ' ')} ${tx.note ? '• ' + tx.note : ''}</div>
+              </div>
+            </div>
+            <div class="text-right">
+              <div class="text-sm font-extrabold ${isExpense ? 'text-slate-800' : 'text-emerald-600'}">
+                ${isExpense ? '-' : '+'}${Number(tx.amount).toFixed(2)}
+              </div>
+              <!-- 优化 2：增加编辑功能按钮 -->
+              <div class="flex justify-end gap-2 mt-1">
+                <button onclick="openTransactionModal('${tx.id}')" class="text-[10px] text-indigo-500 hover:text-indigo-700">编辑</button>
+                <button onclick="deleteTransaction('${tx.id}')" class="text-[10px] text-slate-300 hover:text-rose-500">删除</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // --- Tab 3: 统计分析 ---
+    function setStatType(type) {
+      statType = type;
+      const expenseBtn = document.getElementById('statTypeExpenseBtn');
+      const incomeBtn = document.getElementById('statTypeIncomeBtn');
+
+      if (type === 'expense') {
+        expenseBtn.className = 'py-1.5 rounded-lg bg-rose-500 text-white shadow-sm transition';
+        incomeBtn.className = 'py-1.5 rounded-lg text-slate-600 transition';
+      } else {
+        expenseBtn.className = 'py-1.5 rounded-lg text-slate-600 transition';
+        incomeBtn.className = 'py-1.5 rounded-lg bg-emerald-500 text-white shadow-sm transition';
+      }
+      renderStatistics();
+    }
+
+    function setStatTimeRange(rangeKey) {
+      statTimeRange = rangeKey;
+      document.querySelectorAll('.stat-time-btn').forEach(btn => {
+        btn.className = 'stat-time-btn flex-1 py-1 text-center rounded-lg font-medium text-slate-600';
+      });
+      document.getElementById(`statTime-${rangeKey}`).className = 'stat-time-btn flex-1 py-1 text-center rounded-lg font-medium bg-white text-indigo-600 shadow-sm';
+      renderStatistics();
+    }
+
+    function renderStatistics() {
+      const mainAcc = getActiveMainAccount();
+      
+      const filteredTx = appData.transactions.filter(tx => 
+        tx.mainAccountId === mainAcc.id && 
+        tx.type === statType && 
+        isWithinTimeRange(tx.datetime, statTimeRange)
+      );
+
+      const totalAmount = filteredTx.reduce((sum, tx) => sum + Number(tx.amount), 0);
+      document.getElementById('statSummaryTitle').innerText = `所选区间总${statType === 'expense' ? '支出' : '收入'}`;
+      document.getElementById('statSummaryAmount').innerText = `¥ ${totalAmount.toFixed(2)}`;
+      document.getElementById('statSummaryCount').innerText = `${filteredTx.length} 笔`;
+
+      const categoryMap = {};
+      filteredTx.forEach(tx => {
+        categoryMap[tx.category] = (categoryMap[tx.category] || 0) + Number(tx.amount);
+      });
+
+      const subMap = {};
+      filteredTx.forEach(tx => {
+        const sa = mainAcc.subAccounts.find(s => s.id === tx.subAccountId);
+        const name = sa ? sa.name : '未定义';
+        subMap[name] = (subMap[name] || 0) + Number(tx.amount);
+      });
+
+      renderCategoryChartAndList(categoryMap, totalAmount);
+      renderSubAccountChart(subMap);
+    }
+
+    function renderCategoryChartAndList(categoryData, totalAmount) {
+      const ctx = document.getElementById('categoryChart').getContext('2d');
+      const labels = Object.keys(categoryData);
+      const data = Object.values(categoryData);
+
+      if (categoryChartInstance) categoryChartInstance.destroy();
+
+      const breakdownContainer = document.getElementById('categoryBreakdownList');
+
+      if (labels.length === 0) {
+        ctx.clearRect(0, 0, 200, 200);
+        breakdownContainer.innerHTML = `<div class="text-center py-4 text-xs text-slate-400">该区间无相关数据</div>`;
+        return;
+      }
+
+      const colors = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#64748b'];
+
+      categoryChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{ data: data, backgroundColor: colors, borderWidth: 0 }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } }
+        }
+      });
+
+      breakdownContainer.innerHTML = labels.map((cat, idx) => {
+        const amt = categoryData[cat];
+        const percent = totalAmount > 0 ? ((amt / totalAmount) * 100).toFixed(1) : 0;
+        const color = colors[idx % colors.length];
+
+        return `
+          <div class="space-y-1">
+            <div class="flex justify-between text-xs">
+              <span class="font-medium text-slate-700 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full inline-block" style="background-color: ${color}"></span>
+                ${cat}
+              </span>
+              <span class="text-slate-500 font-semibold">¥${amt.toFixed(2)} (${percent}%)</span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+              <div class="h-1.5 rounded-full" style="width: ${percent}%; background-color: ${color}"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderSubAccountChart(subData) {
+      const ctx = document.getElementById('subAccountChart').getContext('2d');
+      const labels = Object.keys(subData);
+      const data = Object.values(subData);
+
+      if (subAccountChartInstance) subAccountChartInstance.destroy();
+
+      if (labels.length === 0) {
+        ctx.clearRect(0, 0, 200, 200);
+        return;
+      }
+
+      subAccountChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: statType === 'expense' ? '支出金额' : '收入金额',
+            data: data,
+            backgroundColor: statType === 'expense' ? '#f43f5e' : '#10b981',
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 } } },
+            x: { grid: { display: false }, ticks: { font: { size: 10 } } }
+          }
+        }
+      });
+    }
+
+    // --- Modal 操作与流水编辑/记一笔逻辑 ---
+    // 优化 2 & 优化 3：同时支持新增记一笔与修改现有流水，且新增时默认空值占位
+    function openTransactionModal(txId = null) {
+      const mainAcc = getActiveMainAccount();
+      if (!mainAcc.subAccounts || mainAcc.subAccounts.length === 0) {
+        alert('当前主账户下没有子账户，请先创建一个子账户！');
+        return;
+      }
+
+      editingTxId = txId;
+      const titleEl = document.getElementById('txModalTitle');
+
+      if (editingTxId) {
+        // 编辑已有流水模式
+        const tx = appData.transactions.find(t => t.id === editingTxId);
+        if (!tx) return;
+
+        titleEl.innerText = '编辑流水';
+
+        // 绑定收支单选框
+        const radioType = document.querySelector(`input[name="txType"][value="${tx.type}"]`);
+        if (radioType) radioType.checked = true;
+
+        // 子账户下拉选择
+        const subSelect = document.getElementById('txSubAccount');
+        subSelect.innerHTML = '<option value="" disabled hidden>-- 请选择子账户 --</option>' + 
+          mainAcc.subAccounts.map(sa => `<option value="${sa.id}">${sa.name}</option>`).join('');
+        subSelect.value = tx.subAccountId;
+
+        // 分类下拉选择
+        updateCategoryOptions(tx.category);
+
+        document.getElementById('txAmount').value = tx.amount;
+        document.getElementById('txDateTime').value = tx.datetime;
+        document.getElementById('txNote').value = tx.note || '';
+      } else {
+        // 新增记一笔模式（优化 3：默认保持空白占位）
+        titleEl.innerText = '记一笔';
+
+        const radioExpense = document.querySelector('input[name="txType"][value="expense"]');
+        if (radioExpense) radioExpense.checked = true;
+
+        const subSelect = document.getElementById('txSubAccount');
+        subSelect.innerHTML = '<option value="" disabled selected hidden>-- 请选择子账户 --</option>' + 
+          mainAcc.subAccounts.map(sa => `<option value="${sa.id}">${sa.name}</option>`).join('');
+        subSelect.value = '';
+
+        updateCategoryOptions(null);
+
+        document.getElementById('txDateTime').value = getNowISO();
+        document.getElementById('txAmount').value = '';
+        document.getElementById('txNote').value = '';
+      }
+
+      document.getElementById('modalTransaction').classList.remove('hidden');
+    }
+
+    // 优化 3：更新分类下拉列表，无预设时置空
+    function updateCategoryOptions(selectedCategory = null) {
+      const type = document.querySelector('input[name="txType"]:checked').value;
+      const catSelect = document.getElementById('txCategory');
+      const categories = getMergedCategories(type);
+
+      let optionsHtml = '<option value="" disabled selected hidden>-- 请选择分类 --</option>';
+      if (categories.length === 0) {
+        optionsHtml += `<option value="" disabled>(暂无自定义分类，请添加)</option>`;
+      } else {
+        optionsHtml += categories.map(c => `<option value="${c}">${c}</option>`).join('');
+      }
+      optionsHtml += `<option value="__ADD_NEW__" class="font-bold text-indigo-600">+ 自定义分类...</option>`;
+      catSelect.innerHTML = optionsHtml;
+
+      if (selectedCategory && categories.includes(selectedCategory)) {
+        catSelect.value = selectedCategory;
+      } else {
+        catSelect.value = '';
+      }
+    }
+
+    function handleCategorySelectChange(selectEl) {
+      if (selectEl.value === '__ADD_NEW__') {
+        addNewCategoryPrompt();
+      }
+    }
+
+    // 优化 1：添加分类至当前主账户
+    function addNewCategoryPrompt() {
+      const type = document.querySelector('input[name="txType"]:checked').value;
+      const typeLabel = type === 'expense' ? '支出' : '收入';
+      const newCat = prompt(`请输入新的${typeLabel}分类名称：`);
+
+      if (newCat && newCat.trim()) {
+        const trimmed = newCat.trim();
+        const ma = getActiveMainAccount();
+        if (!ma.customCategories) ma.customCategories = { expense: [], income: [] };
+        if (!ma.customCategories[type]) ma.customCategories[type] = [];
+
+        if (!ma.customCategories[type].includes(trimmed)) {
+          ma.customCategories[type].push(trimmed);
+          saveData();
+        }
+        updateCategoryOptions(trimmed);
+      } else {
+        document.getElementById('txCategory').value = '';
+      }
+    }
+
+    // 优化 1：从当前主账户中删除指定分类
+    function deleteCategoryPrompt() {
+      const type = document.querySelector('input[name="txType"]:checked').value;
+      const typeLabel = type === 'expense' ? '支出' : '收入';
+      const categories = getMergedCategories(type);
+
+      if (!categories || categories.length === 0) {
+        alert(`当前主账户没有可删除的自定义${typeLabel}分类`);
+        return;
+      }
+
+      let msg = `请输入要删除的${typeLabel}分类序号或名称：\n\n`;
+      categories.forEach((cat, index) => {
+        msg += `${index + 1}. ${cat}\n`;
+      });
+
+      const input = prompt(msg);
+      if (!input) return;
+
+      const trimmed = input.trim();
+      let targetCat = null;
+
+      const idx = parseInt(trimmed, 10);
+      if (!isNaN(idx) && idx >= 1 && idx <= categories.length) {
+        targetCat = categories[idx - 1];
+      } else if (categories.includes(trimmed)) {
+        targetCat = trimmed;
+      }
+
+      if (targetCat) {
+        if (confirm(`确定要删除分类“${targetCat}”吗？\n（已记录的历史流水仍会保留原分类名）`)) {
+          const ma = getActiveMainAccount();
+          ma.customCategories[type] = ma.customCategories[type].filter(c => c !== targetCat);
+          saveData();
+          updateCategoryOptions(null);
+        }
+      } else {
+        alert('未找到对应分类，请核对输入！');
+      }
+    }
+
+    // 保存/更新流水记录
+    function saveTransaction(e) {
+      e.preventDefault();
+      const type = document.querySelector('input[name="txType"]:checked').value;
+      const amount = parseFloat(document.getElementById('txAmount').value);
+      const subAccountId = document.getElementById('txSubAccount').value;
+      let category = document.getElementById('txCategory').value;
+      const datetime = document.getElementById('txDateTime').value;
+      const note = document.getElementById('txNote').value;
+
+      if (!subAccountId) {
+        alert('请先选择有效的子账户！');
+        return;
+      }
+
+      if (category === '__ADD_NEW__' || !category) {
+        alert('请先选择或添加有效的分类！');
+        return;
+      }
+
+      if (editingTxId) {
+        // 更新已有流水
+        const tx = appData.transactions.find(t => t.id === editingTxId);
+        if (tx) {
+          tx.type = type;
+          tx.amount = amount;
+          tx.subAccountId = subAccountId;
+          tx.category = category;
+          tx.datetime = datetime;
+          tx.note = note;
+        }
+        editingTxId = null;
+      } else {
+        // 新增流水
+        appData.transactions.push({
+          id: 'tx_' + Date.now(),
+          mainAccountId: appData.activeMainAccountId,
+          subAccountId,
+          type,
+          amount,
+          category,
+          datetime,
+          note
+        });
+      }
+
+      closeModal('modalTransaction');
+      saveData();
+    }
+
+    function deleteTransaction(id) {
+      if (confirm('确认删除该笔流水吗？')) {
+        appData.transactions = appData.transactions.filter(tx => tx.id !== id);
+        saveData();
+      }
+    }
+
+    // --- 主账户 modal: 新增/编辑/删除逻辑 ---
+    function openMainAccountModal(mainAccountId = null) {
+      const title = document.getElementById('mainAccountModalTitle');
+      const idInput = document.getElementById('mainAccountIdInput');
+      const nameInput = document.getElementById('mainAccountNameInput');
+      const delBtn = document.getElementById('deleteMainAccountBtn');
+
+      if (mainAccountId) {
+        const ma = appData.mainAccounts.find(item => item.id === mainAccountId);
+        if (!ma) return;
+        title.innerText = '编辑主账户';
+        idInput.value = ma.id;
+        nameInput.value = ma.name;
+        delBtn.classList.remove('hidden');
+      } else {
+        title.innerText = '新建主账户';
+        idInput.value = '';
+        nameInput.value = '';
+        delBtn.classList.add('hidden');
+      }
+      document.getElementById('modalMainAccount').classList.remove('hidden');
+    }
+
+    function saveMainAccount(e) {
+      e.preventDefault();
+      const id = document.getElementById('mainAccountIdInput').value;
+      const name = document.getElementById('mainAccountNameInput').value.trim();
+      if (!name) return;
+
+      if (id) {
+        const ma = appData.mainAccounts.find(item => item.id === id);
+        if (ma) {
+          ma.name = name;
+        }
+      } else {
+        const newId = 'ma_' + Date.now();
+        appData.mainAccounts.push({
+          id: newId,
+          name: name,
+          customCategories: {
+            expense: ['餐饮食品', '交通出行', '日常购物'],
+            income: ['日常收入']
+          },
+          subAccounts: []
+        });
+        appData.activeMainAccountId = newId;
+      }
+
+      closeModal('modalMainAccount');
+      saveData();
+    }
+
+    function deleteMainAccountFromModal() {
+      const id = document.getElementById('mainAccountIdInput').value;
+      if (!id) return;
+
+      if (appData.mainAccounts.length <= 1) {
+        alert('至少需要保留一个主账户，无法删除！');
+        return;
+      }
+
+      const ma = appData.mainAccounts.find(item => item.id === id);
+      if (!ma) return;
+
+      if (confirm(`确认要删除主账户“${ma.name}”及其下属的所有子账户和历史流水吗？此操作不可恢复！`)) {
+        appData.transactions = appData.transactions.filter(tx => tx.mainAccountId !== id);
+        appData.mainAccounts = appData.mainAccounts.filter(item => item.id !== id);
+        if (appData.activeMainAccountId === id) {
+          appData.activeMainAccountId = appData.mainAccounts[0].id;
+        }
+        closeModal('modalMainAccount');
+        saveData();
+      }
+    }
+
+    // --- 子账户 modal 逻辑 ---
+    function openSubAccountModal(subAccountId = null) {
+      const mainAcc = getActiveMainAccount();
+      if (subAccountId) {
+        const sa = mainAcc.subAccounts.find(item => item.id === subAccountId);
+        document.getElementById('subAccountModalTitle').innerText = '编辑子账户';
+        document.getElementById('subAccountIdInput').value = sa.id;
+        document.getElementById('subAccountNameInput').value = sa.name;
+        document.getElementById('subAccountBalanceInput').value = sa.initialBalance;
+      } else {
+        document.getElementById('subAccountModalTitle').innerText = '新增子账户';
+        document.getElementById('subAccountIdInput').value = '';
+        document.getElementById('subAccountNameInput').value = '';
+        document.getElementById('subAccountBalanceInput').value = '';
+      }
+      document.getElementById('modalSubAccount').classList.remove('hidden');
+    }
+
+    function saveSubAccount(e) {
+      e.preventDefault();
+      const mainAcc = getActiveMainAccount();
+      const saId = document.getElementById('subAccountIdInput').value;
+      const name = document.getElementById('subAccountNameInput').value.trim();
+      const balance = parseFloat(document.getElementById('subAccountBalanceInput').value) || 0;
+
+      if (saId) {
+        const sa = mainAcc.subAccounts.find(item => item.id === saId);
+        if (sa) {
+          sa.name = name;
+          sa.initialBalance = balance;
+        }
+      } else {
+        mainAcc.subAccounts.push({
+          id: 'sa_' + Date.now(),
+          name: name,
+          initialBalance: balance
+        });
+      }
+
+      closeModal('modalSubAccount');
+      saveData();
+    }
+
+    function deleteSubAccount(saId) {
+      if (confirm('删除该子账户后，关联的历史流水仍会保留但可能影响账户平衡，确定删除吗？')) {
+        const mainAcc = getActiveMainAccount();
+        mainAcc.subAccounts = mainAcc.subAccounts.filter(sa => sa.id !== saId);
+        saveData();
+      }
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+      if (id === 'modalTransaction') {
+        editingTxId = null;
+      }
+    }
+
+    // --- JSON 备份导出与导入 ---
+    async function exportData() {
+      try {
+        const jsonStr = JSON.stringify(appData, null, 2);
+        const fileName = `bookkeeping_backup_${new Date().toISOString().slice(0,10)}.json`;
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+
+        if (navigator.share) {
+          try {
+            const file = new File([blob], fileName, { type: 'application/json' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+              await navigator.share({
+                files: [file],
+                title: '多账户记账备份数据',
+                text: '备份文件：' + fileName
+              });
+              return;
+            }
+          } catch (shareErr) {
+            if (shareErr.name === 'AbortError') return;
+            console.warn('Web Share 失败，降级为常规 Blob 下载', shareErr);
+          }
+        }
+
+        const url = URL.createObjectURL(blob);
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.href = url;
+        downloadAnchor.download = fileName;
+        downloadAnchor.style.display = 'none';
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+
+        setTimeout(() => {
+          document.body.removeChild(downloadAnchor);
+          URL.revokeObjectURL(url);
+        }, 1000);
+      } catch (err) {
+        alert('导出文件失败：' + err.message);
+      }
+    }
+
+    function importData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const importedData = JSON.parse(e.target.result);
+          if (importedData && importedData.mainAccounts && importedData.transactions) {
+            appData = importedData;
+            
+            // 补全主账户独立的 customCategories
+            appData.mainAccounts.forEach(ma => {
+              if (!ma.customCategories) {
+                ma.customCategories = { expense: ['餐饮食品'], income: ['日常收入'] };
+              }
+            });
+
+            saveData();
+            alert('数据导入成功！');
+          } else {
+            alert('导入失败：文件格式不符合记账工具的数据规范');
+          }
+        } catch (err) {
+          alert('解析 JSON 文件失败，请检查文件内容。');
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+  </script>
+
+  <!-- Service Worker 注册与自动更新 -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+          .then((registration) => {
+            console.log('ServiceWorker 注册成功:', registration.scope);
+
+            document.addEventListener('visibilitychange', () => {
+              if (document.visibilityState === 'visible') {
+                registration.update();
+              }
+            });
+          })
+          .catch((error) => {
+            console.error('ServiceWorker 注册失败:', error);
+          });
+
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (!refreshing) {
+            refreshing = true;
+            console.log('检测到代码已更新，正在自动刷新页面...');
+            window.location.reload();
+          }
+        });
+      });
+    }
+  </script>
+</body>
+</html>
