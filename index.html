@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>我的工具箱</title>
+  <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface-2: #273449;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --radius: 16px;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: calc(16px + var(--safe-top)) 16px calc(24px + var(--safe-bottom));
+    }
+    .wrap { max-width: 960px; margin: 0 auto; }
+    header h1 { font-size: 22px; margin: 8px 0 4px; font-weight: 700; letter-spacing: .5px; }
+    header p { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+    .search {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--surface); border-radius: 12px; padding: 10px 14px;
+      margin-bottom: 20px; border: 1px solid rgba(255,255,255,.06);
+    }
+    .search input {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: var(--text); font-size: 15px;
+    }
+    .search input::placeholder { color: #64748b; }
+    .search svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      display: flex; flex-direction: column; gap: 10px;
+      background: var(--surface); border-radius: var(--radius);
+      padding: 16px; text-decoration: none; color: inherit;
+      border: 1px solid rgba(255,255,255,.05);
+      transition: transform .15s ease, background .15s ease, border-color .15s ease;
+      min-height: 120px;
+    }
+    .card:active { transform: scale(.97); background: var(--surface-2); }
+    @media (hover: hover) {
+      .card:hover { background: var(--surface-2); border-color: rgba(56,189,248,.35); transform: translateY(-2px); }
+    }
+    .card .icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      display: grid; place-items: center;
+      background: rgba(56,189,248,.12);
+      overflow: hidden; flex: none;
+    }
+    .card .icon img { width: 28px; height: 28px; object-fit: contain; }
+    .card .name { font-size: 15px; font-weight: 600; line-height: 1.3; }
+    .card .desc { font-size: 12px; color: var(--muted); line-height: 1.4; margin-top: auto; }
+    .empty { text-align: center; color: var(--muted); padding: 48px 16px; font-size: 14px; display: none; }
+    footer { margin-top: 32px; text-align: center; color: #475569; font-size: 12px; }
+    .offline-tip {
+      display: none; margin-top: 12px; padding: 10px 14px; border-radius: 10px;
+      background: rgba(245,158,11,.12); color: #fbbf24; font-size: 13px;
+    }
+    body.is-offline .offline-tip { display: block; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>🧰 我的工具箱</h1>
+      <p>点击卡片进入对应工具</p>
+    </header>
+
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <input id="q" type="search" placeholder="搜索工具…" autocomplete="off">
+    </div>
+
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty">没有找到匹配的工具</div>
+    <div class="offline-tip">当前处于离线状态，部分功能可能不可用。</div>
+
+    <footer id="footer"></footer>
+  </div>
+
+  <script src="tools.js"></script>
+  <script>
+    (function () {
+      const grid = document.getElementById('grid');
+      const empty = document.getElementById('empty');
+      const q = document.getElementById('q');
+      const footer = document.getElementById('footer');
+      const tools = Array.isArray(window.TOOLS) ? window.TOOLS : [];
+
+      const FALLBACK_ICON = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>'
+      );
+
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+      }
+
+      function render(list) {
+        grid.innerHTML = list.map(function (t) {
+          const name = escapeHtml(t.name || t.id || '未命名');
+          const desc = escapeHtml(t.desc || '');
+          const url = escapeHtml(t.url || ('tools/' + t.id + '/index.html'));
+          const icon = escapeHtml(t.icon || FALLBACK_ICON);
+          return (
+            '<a class="card" href="' + url + '">' +
+              '<span class="icon"><img src="' + icon + '" alt="" loading="lazy" onerror="this.style.display=\'none\'"></span>' +
+              '<span class="name">' + name + '</span>' +
+              (desc ? '<span class="desc">' + desc + '</span>' : '') +
+            '</a>'
+          );
+        }).join('');
+        empty.style.display = list.length ? 'none' : 'block';
+      }
+
+      render(tools);
+      footer.textContent = '共 ' + tools.length + ' 个工具';
+
+      q.addEventListener('input', function () {
+        const kw = q.value.trim().toLowerCase();
+        if (!kw) return render(tools);
+        render(tools.filter(function (t) {
+          return ((t.name || '') + ' ' + (t.desc || '') + ' ' + (t.id || '')).toLowerCase().indexOf(kw) !== -1;
+        }));
+      });
+
+      function updateOnline() {
+        document.body.classList.toggle('is-offline', !navigator.onLine);
+      }
+      window.addEventListener('online', updateOnline);
+      window.addEventListener('offline', updateOnline);
+      updateOnline();
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('service-worker.js').catch(function (e) {
+            console.warn('SW 注册失败:', e);
+          });
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
