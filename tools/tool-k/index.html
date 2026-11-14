@@ -1,0 +1,425 @@
+﻿<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#4da3ff">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.svg">
+<link rel="apple-touch-icon" href="icon-192.svg">
+<title>健身记录 Pro</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+/* 核心基础设置：防止溢出 */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+  background: #f2f5f9;
+  color: #333;
+}
+
+header {
+  background: #4da3ff;
+  color: white;
+  padding: 18px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 10px rgba(77, 163, 255, 0.2);
+}
+
+.container {
+  padding: 12px;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+/* 首页顶部 2x2 按钮网格 */
+.action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.card {
+  background: white;
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 14px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+/* 输入区域布局优化 */
+.input-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.input-row {
+  display: flex;
+  gap: 8px;
+}
+
+#rec-value { flex: 2; } /* 数值框占大头 */
+#rec-unit { flex: 1.2; min-width: 90px; } /* 单位框占小头 */
+
+input, select {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  font-size: 16px; /* 防止iOS缩放 */
+  background: #f8fafc;
+  outline: none;
+}
+
+input:focus { border-color: #4da3ff; background: #fff; }
+
+button {
+  border: none;
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+button:active { transform: scale(0.96); opacity: 0.8; }
+
+.btn-main { background: #4da3ff; color: white; width: 100%; }
+.btn-gray { background: #e2e8f0; color: #475569; }
+.btn-sort { background: #6366f1; color: white; } /* 排序模式时的亮色 */
+.btn-danger { background: #fff1f2; color: #e11d48; }
+
+/* 排序控制箭头 */
+.sort-box { display: flex; gap: 4px; }
+.arrow-btn { padding: 4px 10px; font-size: 12px; background: #f1f5f9; border-radius: 6px; }
+
+.hidden { display:none; }
+
+.record-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+.record-list-item:last-child { border: none; }
+
+.highlight-tag {
+  background: #fef2f2;
+  color: #ef4444;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 11px;
+  margin-left: 5px;
+}
+</style>
+</head>
+
+<body>
+
+<header>🏋️ 健身记录 Pro</header>
+
+<div class="container" id="home"></div>
+<div class="container hidden" id="detail"></div>
+
+<script>
+// 初始化：如果 localStorage 没有 order，则根据现有 data 生成
+let data = JSON.parse(localStorage.getItem("fitnessData") || "{}");
+let order = JSON.parse(localStorage.getItem("fitnessOrder") || "[]");
+let isSortMode = false;
+let current = null;
+let chart = null;
+
+// 补齐因版本变动可能缺失的 order 数据
+function syncOrder() {
+  const keys = Object.keys(data);
+  // 如果 order 里的项目和 data 不一致（比如导入了旧数据），重新同步
+  if (order.length !== keys.length) {
+    order = keys; 
+  }
+}
+syncOrder();
+
+function save() {
+  localStorage.setItem("fitnessData", JSON.stringify(data));
+  localStorage.setItem("fitnessOrder", JSON.stringify(order));
+}
+
+/* --- 首页逻辑 --- */
+function renderHome() {
+  const home = document.getElementById("home");
+  const detail = document.getElementById("detail");
+  home.classList.remove("hidden");
+  detail.classList.add("hidden");
+
+  let html = `
+    <div class="action-grid">
+      <button class="btn-main" onclick="addItem()">＋ 新项目</button>
+      <button class="${isSortMode ? 'btn-sort' : 'btn-gray'}" onclick="toggleSortMode()">
+        ${isSortMode ? '✅ 完成排序' : '🔃 调整排序'}
+      </button>
+      <button class="btn-gray" onclick="exportData()">📤 导出</button>
+      <button class="btn-gray" onclick="importData()">📥 导入</button>
+    </div>
+  `;
+
+  if (order.length === 0) {
+    html += `<div style="text-align:center; color:#94a3b8; margin-top:50px;">还没有项目，点上方添加一个吧！</div>`;
+  }
+
+  order.forEach((name, index) => {
+    const records = data[name] || [];
+    const latest = records[records.length - 1];
+
+    html += `
+      <div class="card" onclick="${isSortMode ? '' : `openDetail('${name}')`}">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <h3 style="margin:0; font-size:18px;">${name}</h3>
+            <div style="color:#64748b; font-size:13px; margin-top:6px;">
+              ${latest ? `最新：${latest.value}${latest.unit} <small>(${latest.date.split(' ')[0]})</small>` : '暂无记录'}
+            </div>
+          </div>
+          ${isSortMode ? `
+            <div class="sort-box">
+              <button class="arrow-btn" onclick="moveItem(${index}, -1)">↑</button>
+              <button class="arrow-btn" onclick="moveItem(${index}, 1)">↓</button>
+            </div>
+          ` : '<span style="color:#cbd5e1; font-size:18px;">›</span>'}
+        </div>
+      </div>
+    `;
+  });
+  home.innerHTML = html;
+}
+
+function toggleSortMode() {
+  isSortMode = !isSortMode;
+  renderHome();
+}
+
+function moveItem(index, direction) {
+  const newIndex = index + direction;
+  if (newIndex < 0 || newIndex >= order.length) return;
+  [order[index], order[newIndex]] = [order[newIndex], order[index]];
+  save();
+  renderHome();
+}
+
+function addItem() {
+  const name = prompt("输入项目名称");
+  if (!name || data[name]) return;
+  data[name] = [];
+  order.push(name);
+  save();
+  renderHome();
+}
+
+/* --- 详情页逻辑 --- */
+function openDetail(name) {
+  current = name;
+  renderDetail();
+  if (data[current].length > 0) setTimeout(showChart, 100);
+}
+
+function renderDetail() {
+  const detail = document.getElementById("detail");
+  const home = document.getElementById("home");
+  home.classList.add("hidden");
+  detail.classList.remove("hidden");
+
+  const records = data[current] || [];
+  const maxVal = records.length ? Math.max(...records.map(r=>r.value)) : 0;
+
+  detail.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+      <button class="btn-gray" onclick="renderHome()" style="padding:8px 12px;">← 返回</button>
+      <h3 style="margin:0">${current}</h3>
+      <div style="display:flex; gap:6px;">
+        <button class="btn-gray" onclick="editItem()" style="padding:8px;">✏️</button>
+        <button class="btn-danger" onclick="deleteItem()" style="padding:8px;">🗑️</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="input-section">
+        <div class="input-row">
+          <input id="rec-value" type="number" pattern="[0-9]*" placeholder="数值">
+          <select id="rec-unit">
+            <option>个</option>
+            <option>秒</option>
+            <option>分钟</option>
+            <option>kg</option>
+          </select>
+        </div>
+        <button class="btn-main" onclick="addRecord()">保存本次记录</button>
+      </div>
+      <canvas id="chart" height="160" style="margin-top:15px;"></canvas>
+    </div>
+
+    <div style="margin:20px 0 10px 5px; font-weight:bold; color:#64748b;">历史明细</div>
+    <div class="card" style="padding-top:5px; padding-bottom:5px;">
+      ${[...records].reverse().map((r, i) => {
+        const originalIdx = records.length - 1 - i;
+        return `
+          <div class="record-list-item">
+            <div>
+              <div style="font-weight:700; font-size:16px;">
+                ${r.value} <small style="font-weight:normal; color:#64748b;">${r.unit}</small>
+                ${r.value >= maxVal && records.length > 1 ? '<span class="highlight-tag">破纪录</span>' : ''}
+              </div>
+              <div style="color:#94a3b8; font-size:12px; margin-top:2px;">${r.date}</div>
+            </div>
+            <button style="color:#ef4444; background:none; font-size:13px; font-weight:normal;" onclick="deleteRecord(${originalIdx})">删除</button>
+          </div>
+        `;
+      }).join("") || '<div style="text-align:center; color:#cbd5e1; padding:20px;">空空如也</div>'}
+    </div>
+  `;
+}
+
+function addRecord() {
+  const valEl = document.getElementById("rec-value");
+  const unitEl = document.getElementById("rec-unit");
+  const val = parseFloat(valEl.value);
+  
+  if (isNaN(val)) return alert("请填入有效数值");
+
+  const now = new Date();
+  const dateStr = `${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  data[current].push({ value: val, unit: unitEl.value, date: dateStr });
+  save();
+  renderDetail();
+  showChart();
+  valEl.value = ""; // 记录完自动清空输入框
+}
+
+function showChart() {
+  const ctx = document.getElementById("chart");
+  const records = data[current];
+  if (chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: records.map(r => r.date.split(' ')[0]),
+      datasets: [{
+        data: records.map(r => r.value),
+        borderColor: '#4da3ff',
+        backgroundColor: 'rgba(77,163,255,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 4
+      }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: { x: { display: false }, y: { ticks: { maxTicksLimit: 5 } } }
+    }
+  });
+}
+
+/* --- 数据管理 --- */
+function editItem() {
+  const n = prompt("修改名称", current);
+  if (!n || n === current) return;
+  data[n] = data[current];
+  delete data[current];
+  const idx = order.indexOf(current);
+  if (idx > -1) order[idx] = n;
+  current = n;
+  save();
+  renderDetail();
+}
+
+function deleteItem() {
+  if (!confirm("确定彻底删除该项目吗？")) return;
+  delete data[current];
+  order = order.filter(item => item !== current);
+  save();
+  renderHome();
+}
+
+function deleteRecord(idx) {
+  if (!confirm("删除该条记录？")) return;
+  data[current].splice(idx, 1);
+  save();
+  renderDetail();
+}
+
+// 导出功能
+function exportData() {
+  const blob = new Blob([JSON.stringify({ fitnessData: data, fitnessOrder: order })], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `健身备份_${new Date().toLocaleDateString()}.json`;
+  a.click();
+}
+
+// 导入功能 (核心找回)
+function importData() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json";
+  input.onchange = e => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const imported = JSON.parse(reader.result);
+        if (imported.fitnessData) {
+          data = imported.fitnessData;
+          order = imported.fitnessOrder || Object.keys(data);
+        } else {
+          data = imported;
+          order = Object.keys(data);
+        }
+        save();
+        renderHome();
+        alert("导入成功！");
+      } catch (err) {
+        alert("导入失败，文件格式有误");
+      }
+    };
+    reader.readAsText(e.target.files[0]);
+  };
+  input.click();
+}
+
+renderHome();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js')
+      .then(reg => {
+        console.log('SW registered');
+
+        // 自动检查更新
+        reg.update();
+
+        // 每30分钟检查一次更新
+        setInterval(() => {
+          reg.update();
+        }, 30 * 60 * 1000);
+
+      })
+      .catch(err => console.log('SW error', err));
+  });
+}
+</script>
+</body>
+</html>

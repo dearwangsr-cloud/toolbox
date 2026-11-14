@@ -1,0 +1,9 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192">
+  <rect width="192" height="192" rx="40" fill="#4da3ff"/>
+  <text x="50%" y="54%" text-anchor="middle"
+        font-size="96"
+        fill="white"
+        font-family="Arial">
+    🏋️
+  </text>
+</svg>
