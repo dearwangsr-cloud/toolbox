@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#312e81"/>
+    </linearGradient>
+    <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#facc15"/>
+    </linearGradient>
+    <linearGradient id="areaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- 背景卡片 -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+
+  <!-- 背景参考网格线 -->
+  <g stroke="#ffffff" stroke-opacity="0.08" stroke-width="2" stroke-dasharray="6,6">
+    <line x1="80" y1="140" x2="432" y2="140" />
+    <line x1="80" y1="220" x2="432" y2="220" />
+    <line x1="80" y1="300" x2="432" y2="300" />
+    <line x1="80" y1="380" x2="432" y2="380" />
+  </g>
+
+  <!-- 背景柱状图剪影 -->
+  <g fill="#ffffff" fill-opacity="0.12">
+    <rect x="100" y="280" width="36" height="100" rx="6"/>
+    <rect x="170" y="220" width="36" height="160" rx="6"/>
+    <rect x="240" y="250" width="36" height="130" rx="6"/>
+    <rect x="310" y="170" width="36" height="210" rx="6"/>
+    <rect x="380" y="120" width="36" height="260" rx="6"/>
+  </g>
+
+  <!-- 曲线阴影填充 -->
+  <path d="M 80 340 
+           C 130 310, 160 250, 210 260 
+           C 260 270, 290 190, 340 180 
+           C 390 170, 410 130, 432 110 
+           L 432 380 L 80 380 Z" 
+        fill="url(#areaGrad)"/>
+
+  <!-- 核心高亮趋势线 -->
+  <path d="M 80 340 
+           C 130 310, 160 250, 210 260 
+           C 260 270, 290 190, 340 180 
+           C 390 170, 410 130, 432 110" 
+        fill="none" stroke="url(#lineGrad)" stroke-width="12" stroke-linecap="round" filter="url(#glow)"/>
+
+  <!-- 关键数据节点 -->
+  <circle cx="80" cy="340" r="8" fill="#38bdf8" stroke="#ffffff" stroke-width="4"/>
+  <circle cx="210" cy="260" r="8" fill="#34d399" stroke="#ffffff" stroke-width="4"/>
+  <circle cx="340" cy="180" r="8" fill="#facc15" stroke="#ffffff" stroke-width="4"/>
+  <circle cx="432" cy="110" r="10" fill="#ffffff" stroke="#facc15" stroke-width="4"/>
+</svg>

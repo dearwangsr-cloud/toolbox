@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>指数数据记录工具</title>
+    <!-- PWA & 移动端 WebApp 配置 -->
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- CDN 依赖: Tailwind CSS & Chart.js & FontAwesome Icons -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* 移动端触摸与平滑滚动优化 */
+        body {
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        input, textarea {
+            user-select: text;
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+
+    <!-- 顶部导航栏 -->
+    <header class="bg-indigo-600 text-white shadow-md sticky top-0 z-30">
+        <div class="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+            <div class="flex items-center space-x-2 cursor-pointer" onclick="switchView('dashboard')">
+                <i class="fa-solid fa-chart-line text-xl text-indigo-200"></i>
+                <span class="font-bold text-lg tracking-wide">指数记录工具</span>
+            </div>
+            <div class="flex items-center space-x-3 text-sm">
+                <button onclick="exportData()" class="p-2 hover:bg-indigo-700 rounded-lg transition" title="备份数据">
+                    <i class="fa-solid fa-download"></i>
+                </button>
+                <button onclick="document.getElementById('importFile').click()" class="p-2 hover:bg-indigo-700 rounded-lg transition" title="恢复数据">
+                    <i class="fa-solid fa-upload"></i>
+                </button>
+                <input type="file" id="importFile" accept=".json" class="hidden" onchange="importData(event)">
+            </div>
+        </div>
+    </header>
+
+    <!-- 主体内容容器 -->
+    <main class="flex-1 max-w-5xl w-full mx-auto p-4 pb-20">
+
+        <!-- 视图 1：主题看板 (Dashboard) -->
+        <section id="view-dashboard" class="space-y-4">
+            <div class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                <div>
+                    <h1 class="text-xl font-bold text-slate-800">指数主题</h1>
+                    <p class="text-xs text-slate-500 mt-0.5">创建主题，多维度追踪对比数据变化</p>
+                </div>
+                <button onclick="openModal('modal-theme')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-2 rounded-lg font-medium shadow-sm transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-plus text-xs"></i> 新建主题
+                </button>
+            </div>
+
+            <!-- 主题卡片列表 -->
+            <div id="theme-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- 动态渲染 -->
+            </div>
+        </section>
+
+        <!-- 视图 2：主题详情与图表分析 (Theme Detail) -->
+        <section id="view-detail" class="hidden space-y-4">
+            <!-- 顶部面包屑与标题 -->
+            <div class="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                <div class="flex items-center space-x-3">
+                    <button onclick="switchView('dashboard')" class="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition">
+                        <i class="fa-solid fa-arrow-left"></i>
+                    </button>
+                    <div>
+                        <h2 id="detail-theme-title" class="text-lg font-bold text-slate-800">--</h2>
+                        <p id="detail-theme-desc" class="text-xs text-slate-500 truncate max-w-xs">--</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="openThemeNotes()" class="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition text-sm flex items-center gap-1" title="主题备注">
+                        <i class="fa-regular fa-note-sticky"></i> <span class="hidden sm:inline">备注</span>
+                    </button>
+                    <button onclick="editCurrentTheme()" class="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition text-sm">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button onclick="deleteCurrentTheme()" class="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition text-sm">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 核心功能区域：可视化图表卡片 -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-3 border-slate-100">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-sm font-semibold text-slate-700"><i class="fa-solid fa-chart-area text-indigo-500 mr-1"></i>指数走势</span>
+                    </div>
+                    <!-- 时间范围筛选 -->
+                    <div class="flex bg-slate-100 p-0.5 rounded-lg text-xs font-medium">
+                        <button onclick="setChartRange('1M')" class="range-btn px-2.5 py-1 rounded-md text-slate-600">1月</button>
+                        <button onclick="setChartRange('3M')" class="range-btn px-2.5 py-1 rounded-md text-slate-600">3月</button>
+                        <button onclick="setChartRange('1Y')" class="range-btn px-2.5 py-1 rounded-md text-slate-600">1年</button>
+                        <button onclick="setChartRange('ALL')" class="range-btn px-2.5 py-1 rounded-md active bg-white text-indigo-600 shadow-xs">全部</button>
+                    </div>
+                </div>
+
+                <!-- 图表 Canvas 容器 -->
+                <div class="relative w-full h-64 sm:h-80">
+                    <canvas id="indexChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 指数项管理卡片 -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 space-y-3">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-sm font-bold text-slate-700">包含的指数 (点击查看/编辑备注)</h3>
+                    <button onclick="openModal('modal-index')" class="text-indigo-600 hover:text-indigo-700 text-xs font-semibold flex items-center gap-1">
+                        <i class="fa-solid fa-plus"></i> 添加新指数
+                    </button>
+                </div>
+                <!-- 指数 Pills 列表 -->
+                <div id="index-pills-list" class="flex flex-wrap gap-2">
+                    <!-- 动态渲染 -->
+                </div>
+            </div>
+
+            <!-- 数据明细与录入操作 -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 space-y-3">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-sm font-bold text-slate-700">历史记录数据</h3>
+                    <button onclick="openRecordModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium shadow-sm transition flex items-center gap-1">
+                        <i class="fa-solid fa-plus"></i> 记一笔
+                    </button>
+                </div>
+
+                <!-- 历史表格 -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-600">
+                        <thead class="bg-slate-50 text-slate-500 uppercase border-y border-slate-100">
+                            <tr id="table-header">
+                                <th class="p-2.5">时间</th>
+                                <!-- 动态列 -->
+                                <th class="p-2.5 text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body" class="divide-y divide-slate-100">
+                            <!-- 动态数据行 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal 1: 新建/编辑主题对话框 -->
+    <div id="modal-theme" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 id="modal-theme-title-text" class="font-bold text-slate-800">新建指数主题</h3>
+                <button onclick="closeModal('modal-theme')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form id="form-theme" onsubmit="handleSaveTheme(event)" class="space-y-3">
+                <input type="hidden" id="theme-id">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">主题名称 *</label>
+                    <input type="text" id="theme-name" required placeholder="如：理财账户、创业板与红利比值" class="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">主题简述</label>
+                    <input type="text" id="theme-desc" placeholder="简短描述该主题的作用" class="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">详细备注说明</label>
+                    <textarea id="theme-notes" rows="3" placeholder="添加关于本主题的详细规则、分析逻辑或备忘录..." class="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:border-indigo-500"></textarea>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModal('modal-theme')" class="px-4 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-100">取消</button>
+                    <button type="submit" class="px-4 py-2 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 2: 新建/编辑指数维度对话框 -->
+    <div id="modal-index" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 id="modal-index-title-text" class="font-bold text-slate-800">添加指数维度</h3>
+                <button onclick="closeModal('modal-index')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form id="form-index" onsubmit="handleSaveIndex(event)" class="space-y-3">
+                <input type="hidden" id="index-id">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">指数名称 *</label>
+                    <input type="text" id="index-name" required placeholder="如：本金、收益率、创业板指数" class="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:border-indigo-500">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">单位</label>
+                        <input type="text" id="index-unit" placeholder="如：元、%、点" class="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">标识颜色</label>
+                        <input type="color" id="index-color" value="#4f46e5" class="w-full h-10 border border-slate-200 rounded-lg p-1 cursor-pointer">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">图表 Y 轴位置</label>
+                    <select id="index-axis" class="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:border-indigo-500">
+                        <option value="y">左 Y 轴（主轴，适合常规数值）</option>
+                        <option value="y1">右 Y 轴（次轴，适合比值/百分比）</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">指数备注说明</label>
+                    <textarea id="index-notes" rows="2" placeholder="填写公式、数据来源或说明..." class="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:border-indigo-500"></textarea>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModal('modal-index')" class="px-4 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-100">取消</button>
+                    <button type="submit" class="px-4 py-2 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 3: 数据录入 (记一笔) 对话框 -->
+    <div id="modal-record" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl space-y-4 max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 id="modal-record-title" class="font-bold text-slate-800">录入指数数据</h3>
+                <button onclick="closeModal('modal-record')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form id="form-record" onsubmit="handleSaveRecord(event)" class="space-y-3 overflow-y-auto flex-1 pr-1">
+                <input type="hidden" id="record-id">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">日期时间 *</label>
+                    <input type="datetime-local" id="record-time" required class="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:border-indigo-500">
+                </div>
+                
+                <!-- 各个指数输入框容器 -->
+                <div id="record-inputs-container" class="space-y-3 pt-1 border-t border-slate-100">
+                    <!-- 动态生成 -->
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">本条记录备注</label>
+                    <input type="text" id="record-note" placeholder="如：大跌调仓、收到利息等" class="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:border-indigo-500">
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModal('modal-record')" class="px-4 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-100">取消</button>
+                    <button type="submit" class="px-4 py-2 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm">保存记录</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 4: 查看与编辑备注通用对话框 -->
+    <div id="modal-notes" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 id="modal-notes-title" class="font-bold text-slate-800">备注信息</h3>
+                <button onclick="closeModal('modal-notes')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="space-y-3">
+                <textarea id="modal-notes-content" rows="6" class="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:border-indigo-500" placeholder="在此输入备注..."></textarea>
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="closeModal('modal-notes')" class="px-4 py-2 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-100">关闭</button>
+                    <button type="button" onclick="saveNotesFromModal()" class="px-4 py-2 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm">保存备注</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JS 业务逻辑处理 -->
+    <script>
+        // --- 数据模型 & 全局状态 ---
+        const STORAGE_KEY = 'INDEX_TOOL_DATA_V1';
+        let appData = {
+            themes: []
+        };
+        let currentThemeId = null;
+        let currentChart = null;
+        let chartRange = 'ALL';
+        let activeNotesTarget = null; // 用于记录当前打开的备注目标 { type: 'theme'|'index', id: string }
+
+        // 示例初始化数据
+        const defaultSampleData = {
+            themes: [
+                {
+                    id: 'theme_理财账户',
+                    name: '理财账户',
+                    desc: '追踪理财账户本金、收益与累计收益率',
+                    notes: '理财规划目标：长期复利收益，年化预期 6-8%。',
+                    indices: [
+                        { id: 'idx_本金', name: '本金', unit: '元', color: '#3b82f6', yAxis: 'y', notes: '实际投入资金' },
+                        { id: 'idx_收益', name: '收益', unit: '元', color: '#10b981', yAxis: 'y', notes: '累计已实现与浮动收益' },
+                        { id: 'idx_收益率', name: '收益率', unit: '%', color: '#f59e0b', yAxis: 'y1', notes: '收益 / 本金 * 100%' }
+                    ],
+                    records: [
+                        { id: 'r1', datetime: '2026-01-01T09:00', values: { 'idx_本金': 100000, 'idx_收益': 2000, 'idx_收益率': 2.0 }, note: '1月初始' },
+                        { id: 'r2', datetime: '2026-02-01T09:00', values: { 'idx_本金': 100000, 'idx_收益': 3500, 'idx_收益率': 3.5 }, note: '市场上涨' },
+                        { id: 'r3', datetime: '2026-03-01T09:00', values: { 'idx_本金': 120000, 'idx_收益': 4200, 'idx_收益率': 3.5 }, note: '追加本金2万' }
+                    ]
+                },
+                {
+                    id: 'theme_创业板红利',
+                    name: '创业板-红利指数比值',
+                    desc: '分析成长股与高股息板块的相对强弱度',
+                    notes: '比值高位表示成长股偏贵，比值低位表示红利股偏贵。',
+                    indices: [
+                        { id: 'idx_创业板', name: '创业板指', unit: '点', color: '#6366f1', yAxis: 'y', notes: '399006.SZ' },
+                        { id: 'idx_中证红利', name: '中证红利', unit: '点', color: '#ec4899', yAxis: 'y', notes: '000922.CSI' },
+                        { id: 'idx_比值', name: '创业板/红利比值', unit: '', color: '#8b5cf6', yAxis: 'y1', notes: '创业板指数 / 中证红利指数' }
+                    ],
+                    records: [
+                        { id: 'r10', datetime: '2026-01-05T15:00', values: { 'idx_创业板': 1800, 'idx_中证红利': 5200, 'idx_比值': 0.346 }, note: '' },
+                        { id: 'r11', datetime: '2026-02-05T15:00', values: { 'idx_创业板': 1920, 'idx_中证红利': 5100, 'idx_比值': 0.376 }, note: '成长风格反弹' },
+                        { id: 'r12', datetime: '2026-03-05T15:00', values: { 'idx_创业板': 1850, 'idx_中证红利': 5300, 'idx_比值': 0.349 }, note: '' }
+                    ]
+                }
+            ]
+        };
+
+        // --- 应用初始化 ---
+        window.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            switchView('dashboard');
+            // 设置日期默认值为当前
+            const now = new Date();
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            document.getElementById('record-time').value = now.toISOString().slice(0,16);
+        });
+
+        // 本地存储读写
+        function loadData() {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+                try {
+                    appData = JSON.parse(raw);
+                } catch(e) {
+                    console.error("读取本地存储失败", e);
+                    appData = defaultSampleData;
+                }
+            } else {
+                appData = defaultSampleData;
+                saveData();
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+        }
+
+        // --- 视图切换逻辑 ---
+        function switchView(viewName, themeId = null) {
+            document.getElementById('view-dashboard').classList.add('hidden');
+            document.getElementById('view-detail').classList.add('hidden');
+
+            if (viewName === 'dashboard') {
+                document.getElementById('view-dashboard').classList.remove('hidden');
+                currentThemeId = null;
+                renderDashboard();
+            } else if (viewName === 'detail' && themeId) {
+                currentThemeId = themeId;
+                document.getElementById('view-detail').classList.remove('hidden');
+                renderThemeDetail();
+            }
+        }
+
+        // --- 1. Dashboard 渲染 ---
+        function renderDashboard() {
+            const listEl = document.getElementById('theme-list');
+            listEl.innerHTML = '';
+
+            if (appData.themes.length === 0) {
+                listEl.innerHTML = `<div class="col-span-full bg-white p-8 rounded-xl text-center text-slate-400">暂无指数主题，点击右上角新建</div>`;
+                return;
+            }
+
+            appData.themes.forEach(theme => {
+                const recordCount = theme.records ? theme.records.length : 0;
+                const indexCount = theme.indices ? theme.indices.length : 0;
+                const lastRecord = recordCount > 0 ? theme.records[recordCount - 1].datetime.replace('T', ' ') : '暂无记录';
+
+                const card = document.createElement('div');
+                card.className = "bg-white p-5 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition cursor-pointer flex flex-col justify-between";
+                card.onclick = () => switchView('detail', theme.id);
+                card.innerHTML = `
+                    <div>
+                        <div class="flex justify-between items-start">
+                            <h3 class="font-bold text-slate-800 text-lg">${escapeHtml(theme.name)}</h3>
+                            <span class="bg-indigo-50 text-indigo-600 text-xs px-2.5 py-1 rounded-full font-medium">${indexCount} 个指标</span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1 line-clamp-2">${escapeHtml(theme.desc || '暂无描述')}</p>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-slate-50 flex justify-between items-center text-xs text-slate-400">
+                        <span>记录: ${recordCount} 条</span>
+                        <span>最新: ${lastRecord}</span>
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+        }
+
+        // --- 2. 主题详情页渲染 ---
+        function renderThemeDetail() {
+            const theme = getActiveTheme();
+            if (!theme) return;
+
+            document.getElementById('detail-theme-title').innerText = theme.name;
+            document.getElementById('detail-theme-desc').innerText = theme.desc || '无描述';
+
+            // 渲染包含的指数标签列表 (Pills)
+            renderIndexPills(theme);
+
+            // 渲染历史数据表格
+            renderDataTable(theme);
+
+            // 渲染 Chart.js 图表
+            renderChart(theme);
+        }
+
+        function getActiveTheme() {
+            return appData.themes.find(t => t.id === currentThemeId);
+        }
+
+        // 渲染指数 Pills
+        function renderIndexPills(theme) {
+            const container = document.getElementById('index-pills-list');
+            container.innerHTML = '';
+
+            theme.indices.forEach(idx => {
+                const pill = document.createElement('div');
+                pill.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium bg-slate-50 border-slate-200";
+                pill.innerHTML = `
+                    <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${idx.color}"></span>
+                    <span class="text-slate-700">${escapeHtml(idx.name)} ${idx.unit ? '('+idx.unit+')' : ''}</span>
+                    <button onclick="openIndexNotes('${idx.id}', event)" class="text-slate-400 hover:text-amber-500 ml-1" title="查看/编辑备注">
+                        <i class="fa-regular fa-note-sticky"></i>
+                    </button>
+                    <button onclick="editIndex('${idx.id}', event)" class="text-slate-400 hover:text-indigo-600 ml-0.5">
+                        <i class="fa-solid fa-pen text-[10px]"></i>
+                    </button>
+                `;
+                container.appendChild(pill);
+            });
+        }
+
+        // 渲染表格
+        function renderDataTable(theme) {
+            const headerRow = document.getElementById('table-header');
+            const tbody = document.getElementById('table-body');
+
+            // 动态构建表头
+            headerRow.innerHTML = `<th class="p-2.5">时间</th>`;
+            theme.indices.forEach(idx => {
+                headerRow.innerHTML += `<th class="p-2.5 text-right">${escapeHtml(idx.name)}</th>`;
+            });
+            headerRow.innerHTML += `<th class="p-2.5">备注</th><th class="p-2.5 text-right">操作</th>`;
+
+            // 构建数据行
+            tbody.innerHTML = '';
+            const sortedRecords = [...theme.records].sort((a,b) => new Date(b.datetime) - new Date(a.datetime));
+
+            sortedRecords.forEach(rec => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition";
+                
+                let cellsHtml = `<td class="p-2.5 font-medium text-slate-700 whitespace-nowrap">${rec.datetime.replace('T', ' ')}</td>`;
+                
+                theme.indices.forEach(idx => {
+                    const val = (rec.values && rec.values[idx.id] !== undefined) ? rec.values[idx.id] : '-';
+                    cellsHtml += `<td class="p-2.5 text-right font-mono">${val}</td>`;
+                });
+
+                cellsHtml += `<td class="p-2.5 text-slate-400 truncate max-w-[100px]">${escapeHtml(rec.note || '')}</td>`;
+                cellsHtml += `
+                    <td class="p-2.5 text-right whitespace-nowrap">
+                        <button onclick="editRecord('${rec.id}')" class="text-indigo-600 hover:text-indigo-800 mr-2"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="deleteRecord('${rec.id}')" class="text-rose-500 hover:text-rose-700"><i class="fa-solid fa-trash-can"></i></button>
+                    </td>
+                `;
+
+                tr.innerHTML = cellsHtml;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // --- 3. Chart.js 核心绘图逻辑 (按时间跨度分布 & 优化刻度和节点显示) ---
+        function renderChart(theme) {
+            const ctx = document.getElementById('indexChart').getContext('2d');
+            if (currentChart) {
+                currentChart.destroy();
+            }
+
+            // 按时间升序排序记录
+            let records = [...theme.records].sort((a,b) => new Date(a.datetime) - new Date(b.datetime));
+
+            // 时间范围过滤
+            if (chartRange !== 'ALL' && records.length > 0) {
+                const now = new Date();
+                let cutoff = new Date();
+                if (chartRange === '1M') cutoff.setMonth(now.getMonth() - 1);
+                if (chartRange === '3M') cutoff.setMonth(now.getMonth() - 3);
+                if (chartRange === '1Y') cutoff.setFullYear(now.getFullYear() - 1);
+                records = records.filter(r => new Date(r.datetime) >= cutoff);
+            }
+
+            // 构建 datasets (点数据使用 {x: 时间戳, y: 数值} 以实现按时间跨度物理分布)
+            const datasets = theme.indices.map(idx => {
+                const data = records.map(r => ({
+                    x: new Date(r.datetime).getTime(),
+                    y: (r.values && r.values[idx.id] !== undefined) ? r.values[idx.id] : null
+                }));
+
+                // 优化点显示：只保留第一个和最后一个点的半径为3，中间点默认为0（不直接绘制，点击/悬浮时显示）
+                const pointRadius = data.map((_, index) => (index === 0 || index === data.length - 1) ? 3 : 0);
+
+                return {
+                    label: idx.name + (idx.unit ? ` (${idx.unit})` : ''),
+                    data: data,
+                    borderColor: idx.color || '#4f46e5',
+                    backgroundColor: idx.color || '#4f46e5',
+                    yAxisID: idx.yAxis || 'y',
+                    tension: 0.2,
+                    spanGaps: true,
+                    pointRadius: pointRadius,
+                    pointHoverRadius: 6,
+                    pointHitRadius: 10
+                };
+            });
+
+            const minTime = records.length > 0 ? new Date(records[0].datetime).getTime() : undefined;
+            const maxTime = records.length > 0 ? new Date(records[records.length - 1].datetime).getTime() : undefined;
+
+            currentChart = new Chart(ctx, {
+                type: 'line',
+                data: { datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { boxWidth: 12, font: { size: 11 } }
+                        },
+                        tooltip: {
+                            padding: 10,
+                            boxPadding: 4,
+                            callbacks: {
+                                // 悬浮提示框中的时间格式化显示
+                                title: function(tooltipItems) {
+                                    if (!tooltipItems.length) return '';
+                                    const xVal = tooltipItems[0].parsed.x;
+                                    const date = new Date(xVal);
+                                    if (isNaN(date.getTime())) return '';
+                                    const year = date.getFullYear();
+                                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                                    const day = String(date.getDate()).padStart(2, '0');
+                                    const hours = String(date.getHours()).padStart(2, '0');
+                                    const minutes = String(date.getMinutes()).padStart(2, '0');
+                                    return `${year}-${month}-${day} ${hours}:${minutes}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            min: minTime,
+                            max: maxTime,
+                            grid: { display: false },
+                            afterBuildTicks: function(scale) {
+                                if (!records || records.length === 0) return;
+                                const t0 = new Date(records[0].datetime).getTime();
+                                const tEnd = new Date(records[records.length - 1].datetime).getTime();
+                                let tickValues = [];
+                                
+                                // 优化 X 轴刻度：只保留第1个、中间1个和最后1个时间刻度
+                                if (records.length <= 2) {
+                                    tickValues = [t0, tEnd];
+                                } else {
+                                    const tMid = new Date(records[Math.floor((records.length - 1) / 2)].datetime).getTime();
+                                    tickValues = [t0, tMid, tEnd];
+                                }
+                                
+                                // 去重去零处理
+                                const uniqueValues = [...new Set(tickValues)];
+                                scale.ticks = uniqueValues.map(v => ({ value: v }));
+                            },
+                            ticks: {
+                                font: { size: 10 },
+                                callback: function(value) {
+                                    const date = new Date(value);
+                                    if (isNaN(date.getTime())) return '';
+                                    const year = date.getFullYear();
+                                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                                    const day = String(date.getDate()).padStart(2, '0');
+                                    const hours = String(date.getHours()).padStart(2, '0');
+                                    const minutes = String(date.getMinutes()).padStart(2, '0');
+                                    return `${year}-${month}-${day} ${hours}:${minutes}`;
+                                }
+                            }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: false, text: '主轴' },
+                            grid: { color: '#f1f5f9' },
+                            ticks: { font: { size: 10 } }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: theme.indices.some(i => i.yAxis === 'y1'),
+                            position: 'right',
+                            grid: { drawOnChartArea: false }, // 不重叠网格
+                            ticks: { font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        function setChartRange(range) {
+            chartRange = range;
+            document.querySelectorAll('.range-btn').forEach(btn => {
+                btn.classList.remove('bg-white', 'text-indigo-600', 'shadow-xs', 'active');
+                btn.classList.add('text-slate-600');
+            });
+            event.target.classList.add('bg-white', 'text-indigo-600', 'shadow-xs', 'active');
+            renderThemeDetail();
+        }
+
+        // --- 4. Modal 控制与表单交互 ---
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.remove('hidden');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        // 保存/修改 主题
+        function handleSaveTheme(e) {
+            e.preventDefault();
+            const id = document.getElementById('theme-id').value;
+            const name = document.getElementById('theme-name').value.trim();
+            const desc = document.getElementById('theme-desc').value.trim();
+            const notes = document.getElementById('theme-notes').value.trim();
+
+            if (id) {
+                // 编辑
+                const theme = appData.themes.find(t => t.id === id);
+                if (theme) {
+                    theme.name = name;
+                    theme.desc = desc;
+                    theme.notes = notes;
+                }
+            } else {
+                // 新建
+                const newTheme = {
+                    id: 'theme_' + Date.now(),
+                    name,
+                    desc,
+                    notes,
+                    indices: [],
+                    records: []
+                };
+                appData.themes.push(newTheme);
+            }
+
+            saveData();
+            closeModal('modal-theme');
+            document.getElementById('form-theme').reset();
+            document.getElementById('theme-id').value = '';
+
+            if (currentThemeId) {
+                renderThemeDetail();
+            } else {
+                renderDashboard();
+            }
+        }
+
+        function editCurrentTheme() {
+            const theme = getActiveTheme();
+            if (!theme) return;
+
+            document.getElementById('theme-id').value = theme.id;
+            document.getElementById('theme-name').value = theme.name;
+            document.getElementById('theme-desc').value = theme.desc || '';
+            document.getElementById('theme-notes').value = theme.notes || '';
+            document.getElementById('modal-theme-title-text').innerText = '编辑指数主题';
+            openModal('modal-theme');
+        }
+
+        function deleteCurrentTheme() {
+            if (confirm('确定要删除当前主题及其所有历史数据吗？此操作不可恢复。')) {
+                appData.themes = appData.themes.filter(t => t.id !== currentThemeId);
+                saveData();
+                switchView('dashboard');
+            }
+        }
+
+        // 保存/修改 指数维度
+        function handleSaveIndex(e) {
+            e.preventDefault();
+            const theme = getActiveTheme();
+            if (!theme) return;
+
+            const id = document.getElementById('index-id').value;
+            const name = document.getElementById('index-name').value.trim();
+            const unit = document.getElementById('index-unit').value.trim();
+            const color = document.getElementById('index-color').value;
+            const yAxis = document.getElementById('index-axis').value;
+            const notes = document.getElementById('index-notes').value.trim();
+
+            if (id) {
+                // 编辑
+                const idx = theme.indices.find(i => i.id === id);
+                if (idx) {
+                    idx.name = name;
+                    idx.unit = unit;
+                    idx.color = color;
+                    idx.yAxis = yAxis;
+                    idx.notes = notes;
+                }
+            } else {
+                // 新增
+                theme.indices.push({
+                    id: 'idx_' + Date.now(),
+                    name,
+                    unit,
+                    color,
+                    yAxis,
+                    notes
+                });
+            }
+
+            saveData();
+            closeModal('modal-index');
+            document.getElementById('form-index').reset();
+            document.getElementById('index-id').value = '';
+            renderThemeDetail();
+        }
+
+        function editIndex(idxId, e) {
+            e.stopPropagation();
+            const theme = getActiveTheme();
+            const idx = theme.indices.find(i => i.id === idxId);
+            if (!idx) return;
+
+            document.getElementById('index-id').value = idx.id;
+            document.getElementById('index-name').value = idx.name;
+            document.getElementById('index-unit').value = idx.unit || '';
+            document.getElementById('index-color').value = idx.color || '#4f46e5';
+            document.getElementById('index-axis').value = idx.yAxis || 'y';
+            document.getElementById('index-notes').value = idx.notes || '';
+            document.getElementById('modal-index-title-text').innerText = '编辑指数维度';
+            openModal('modal-index');
+        }
+
+        // 录入数据 (Record) 相关
+        function openRecordModal(editRecordId = null) {
+            const theme = getActiveTheme();
+            if (!theme) return;
+
+            if (theme.indices.length === 0) {
+                alert('请先添加至少一个指数维度后再录入数据！');
+                return;
+            }
+
+            const container = document.getElementById('record-inputs-container');
+            container.innerHTML = '';
+            
+            let recordToEdit = null;
+            if (editRecordId) {
+                recordToEdit = theme.records.find(r => r.id === editRecordId);
+            }
+
+            document.getElementById('record-id').value = editRecordId || '';
+            document.getElementById('modal-record-title').innerText = editRecordId ? '编辑指数数据' : '录入指数数据';
+
+            if (recordToEdit) {
+                document.getElementById('record-time').value = recordToEdit.datetime;
+                document.getElementById('record-note').value = recordToEdit.note || '';
+            } else {
+                const now = new Date();
+                now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+                document.getElementById('record-time').value = now.toISOString().slice(0,16);
+                document.getElementById('record-note').value = '';
+            }
+
+            // 动态生成每个指数的数值输入框
+            theme.indices.forEach(idx => {
+                const val = (recordToEdit && recordToEdit.values && recordToEdit.values[idx.id] !== undefined) ? recordToEdit.values[idx.id] : '';
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">
+                        <span class="inline-block w-2 h-2 rounded-full mr-1" style="background-color: ${idx.color}"></span>
+                        ${escapeHtml(idx.name)} ${idx.unit ? '('+idx.unit+')' : ''}
+                    </label>
+                    <input type="number" step="any" data-idx-id="${idx.id}" value="${val}" placeholder="输入数值" class="record-val-input w-full border border-slate-200 rounded-lg p-2 text-sm focus:outline-none focus:border-indigo-500 font-mono">
+                `;
+                container.appendChild(div);
+            });
+
+            openModal('modal-record');
+        }
+
+        function handleSaveRecord(e) {
+            e.preventDefault();
+            const theme = getActiveTheme();
+            if (!theme) return;
+
+            const recordId = document.getElementById('record-id').value;
+            const datetime = document.getElementById('record-time').value;
+            const note = document.getElementById('record-note').value.trim();
+
+            const values = {};
+            document.querySelectorAll('.record-val-input').forEach(input => {
+                const idxId = input.getAttribute('data-idx-id');
+                const val = input.value !== '' ? parseFloat(input.value) : null;
+                if (val !== null) {
+                    values[idxId] = val;
+                }
+            });
+
+            if (recordId) {
+                // 编辑
+                const rec = theme.records.find(r => r.id === recordId);
+                if (rec) {
+                    rec.datetime = datetime;
+                    rec.values = values;
+                    rec.note = note;
+                }
+            } else {
+                // 新建
+                theme.records.push({
+                    id: 'rec_' + Date.now(),
+                    datetime,
+                    values,
+                    note
+                });
+            }
+
+            saveData();
+            closeModal('modal-record');
+            renderThemeDetail();
+        }
+
+        function editRecord(recId) {
+            openRecordModal(recId);
+        }
+
+        function deleteRecord(recId) {
+            if (confirm('确定要删除这条记录吗？')) {
+                const theme = getActiveTheme();
+                theme.records = theme.records.filter(r => r.id !== recId);
+                saveData();
+                renderThemeDetail();
+            }
+        }
+
+        // 备注 Modal 逻辑
+        function openThemeNotes() {
+            const theme = getActiveTheme();
+            if (!theme) return;
+            activeNotesTarget = { type: 'theme', id: theme.id };
+            document.getElementById('modal-notes-title').innerText = `主题备注：${theme.name}`;
+            document.getElementById('modal-notes-content').value = theme.notes || '';
+            openModal('modal-notes');
+        }
+
+        function openIndexNotes(idxId, e) {
+            e.stopPropagation();
+            const theme = getActiveTheme();
+            const idx = theme.indices.find(i => i.id === idxId);
+            if (!idx) return;
+
+            activeNotesTarget = { type: 'index', id: idxId };
+            document.getElementById('modal-notes-title').innerText = `指数备注：${idx.name}`;
+            document.getElementById('modal-notes-content').value = idx.notes || '';
+            openModal('modal-notes');
+        }
+
+        function saveNotesFromModal() {
+            if (!activeNotesTarget) return;
+            const content = document.getElementById('modal-notes-content').value.trim();
+            const theme = getActiveTheme();
+
+            if (activeNotesTarget.type === 'theme' && theme) {
+                theme.notes = content;
+            } else if (activeNotesTarget.type === 'index' && theme) {
+                const idx = theme.indices.find(i => i.id === activeNotesTarget.id);
+                if (idx) idx.notes = content;
+            }
+
+            saveData();
+            closeModal('modal-notes');
+            renderThemeDetail();
+        }
+
+        // --- 5. 数据导入与导出功能 ---
+        function exportData() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `指数记录工具备份_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function importData(event) {
+            const fileReader = new FileReader();
+            fileReader.onload = function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (parsed && Array.isArray(parsed.themes)) {
+                        appData = parsed;
+                        saveData();
+                        alert('数据恢复成功！');
+                        switchView('dashboard');
+                    } else {
+                        alert('非有效的数据备份文件！');
+                    }
+                } catch(err) {
+                    alert('导入失败，文件格式错误！');
+                }
+            };
+            fileReader.readAsText(event.target.files[0]);
+        }
+
+        // 辅助转义函数
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;")
+                      .replace(/</g, "&lt;")
+                      .replace(/>/g, "&gt;")
+                      .replace(/"/g, "&quot;")
+                      .replace(/'/g, "&#039;");
+        }
+    </script>
+<!-- 自动注册 Service Worker 支持 PWA 和离线更新 -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js')
+        .then(reg => {
+          console.log('Service Worker 注册成功:', reg);
+          // 每次打开网页自动触发更新检查
+          reg.update();
+        })
+        .catch(err => console.error('Service Worker 注册失败:', err));
+    });
+  }
+</script>
+</body>
+</html>
