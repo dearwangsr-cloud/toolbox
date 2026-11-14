@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>家庭收支记录系统</title>
-    <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#10b981">
     <link rel="icon" type="image/svg+xml" href="./icon.svg">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -748,23 +747,6 @@
             reader.readAsText(file);
         }
     </script>
-    <script>
-        // PWA 自动无感版本更新检测流
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./service-worker.js')
-                    .then((registration) => {
-                        registration.addEventListener('updatefound', () => {
-                            const newWorker = registration.installing;
-                            newWorker.addEventListener('statechange', () => {
-                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    window.location.reload();
-                                }
-                            });
-                        });
-                    });
-            });
-        }
-    </script>
 </body>
+<a href="/" style="position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:99999; padding:6px 16px; border-radius:999px; background:rgba(0,0,0,.45); color:#fff; font:13px/1 -apple-system,system-ui,sans-serif; text-decoration:none; backdrop-filter:blur(6px);">← 工具箱</a>
 </html>
