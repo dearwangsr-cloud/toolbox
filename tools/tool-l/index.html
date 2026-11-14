@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#27ae60">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -41,9 +40,6 @@ function handleDeleteProduct(){if(confirm('确定删除？')){liquorData[state.b
 function closeModal(id){document.getElementById(id).style.display='none';document.querySelectorAll('input').forEach(i=>i.value='');}
 render();
 </script>
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./service-worker.js');
-}
-</script>
-</body></html>
+</body>
+<a href="/" style="position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:99999; padding:6px 16px; border-radius:999px; background:rgba(0,0,0,.45); color:#fff; font:13px/1 -apple-system,system-ui,sans-serif; text-decoration:none; backdrop-filter:blur(6px);">← 工具箱</a>
+</html>
