@@ -8,7 +8,6 @@
     <meta name="theme-color" content="#4f46e5">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="manifest" href="manifest.json">
     
     <!-- CDN 依赖: Tailwind CSS & Chart.js & FontAwesome Icons -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -961,19 +960,7 @@
                       .replace(/'/g, "&#039;");
         }
     </script>
-<!-- 自动注册 Service Worker 支持 PWA 和离线更新 -->
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js')
-        .then(reg => {
-          console.log('Service Worker 注册成功:', reg);
-          // 每次打开网页自动触发更新检查
-          reg.update();
-        })
-        .catch(err => console.error('Service Worker 注册失败:', err));
-    });
-  }
 </script>
 </body>
+<a href="/" style="position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:99999; padding:6px 16px; border-radius:999px; background:rgba(0,0,0,.45); color:#fff; font:13px/1 -apple-system,system-ui,sans-serif; text-decoration:none; backdrop-filter:blur(6px);">← 工具箱</a>
 </html>
