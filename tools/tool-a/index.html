@@ -6,7 +6,6 @@
 <title>🌸 孕期记录小工具</title>
 
 <!-- PWA 必备元数据与iOS适配 -->
-<link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#e8829c">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -1476,33 +1475,10 @@ function init(){
       if($('#tab-data').classList.contains('active')) drawCurrentChart();
     }, 180);
   });
-
-  /* 注册 Service Worker，实现应用全自动更新 */
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js').then(reg => {
-        reg.addEventListener('updatefound', () => {
-          const newWorker = reg.installing;
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              newWorker.postMessage({ action: 'skipWaiting' });
-            }
-          });
-        });
-      });
-
-      let refreshing = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!refreshing) {
-          refreshing = true;
-          window.location.reload();
-        }
-      });
-    });
-  }
 }
 
 init();
 </script>
 </body>
+<a href="/" style="position:fixed;top:8px;left:8px;z-index:99999;padding:6px 12px;border-radius:999px;background:rgba(0,0,0,.55);color:#fff;font:14px/1 -apple-system,system-ui,sans-serif;text-decoration:none;backdrop-filter:blur(6px);">← 工具箱</a>
 </html>
