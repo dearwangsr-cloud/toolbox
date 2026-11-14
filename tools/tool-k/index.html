@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#4da3ff">
-<link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.svg">
 <link rel="apple-touch-icon" href="icon-192.svg">
 <title>健身记录 Pro</title>
@@ -401,25 +400,6 @@ function importData() {
 
 renderHome();
 </script>
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js')
-      .then(reg => {
-        console.log('SW registered');
-
-        // 自动检查更新
-        reg.update();
-
-        // 每30分钟检查一次更新
-        setInterval(() => {
-          reg.update();
-        }, 30 * 60 * 1000);
-
-      })
-      .catch(err => console.log('SW error', err));
-  });
-}
-</script>
 </body>
+<a href="/" style="position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:99999; padding:6px 16px; border-radius:999px; background:rgba(0,0,0,.45); color:#fff; font:13px/1 -apple-system,system-ui,sans-serif; text-decoration:none; backdrop-filter:blur(6px);">← 工具箱</a>
 </html>
