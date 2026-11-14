@@ -9,18 +9,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="apple-touch-icon" href="icon.svg">
-    <link rel="manifest" href="/manifest.json">
-
-    <script>
-        // 注册 PWA Service Worker（增加协议判断，避免本地 file:// 协议报错）
-        if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js')
-                    .then(reg => console.log('Service Worker 注册成功:', reg.scope))
-                    .catch(err => console.log('Service Worker 注册失败:', err));
-            });
-        }
-    </script>
 
     <style>
         :root {
@@ -1126,4 +1114,5 @@
     }
 </script>
 </body>
+<a href="/" style="position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:99999; padding:6px 16px; border-radius:999px; background:rgba(0,0,0,.45); color:#fff; font:13px/1 -apple-system,system-ui,sans-serif; text-decoration:none; backdrop-filter:blur(6px);">← 工具箱</a>
 </html>
