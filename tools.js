@@ -17,15 +17,22 @@ window.TOOLS = [
   {
     id: 'tool-b',
     name: '购物价格记录',
-    desc: '另一个小工具',
+    desc: '记录不同商品不同时间的价格变化',
     icon: 'tools/tool-b/icon.svg',
     url: 'tools/tool-b/index.html'
   },
   {
     id: 'tool-c',
-    name: '攒钱记录',
-    desc: '另一个小工具',
+    name: '理财数据记录',
+    desc: '记录攒钱理财的数据变化',
     icon: 'tools/tool-c/icon.svg',
     url: 'tools/tool-c/index.html'
+  },
+  {
+    id: 'tool-d',
+    name: '多账户记账',
+    desc: '收支记录工具，平行设置多个账户',
+    icon: 'tools/tool-d/icon.svg',
+    url: 'tools/tool-d/index.html'
   }
 ];
