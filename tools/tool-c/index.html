@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#f4f6fb">
-<link rel="manifest" href="manifest.json">
 <meta name="description" content="攒钱日记 · 定投理财数据看板">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="攒钱日记">
@@ -1823,26 +1822,7 @@ render();
   }catch(e){}
 })();
 
-/* 2) 注册 Service Worker + 自动更新 */
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){
-    navigator.serviceWorker.register('service-worker.js').then(function(reg){
-      // 回到前台时检查更新
-      document.addEventListener('visibilitychange', function(){
-        if (document.visibilityState === 'visible') reg.update().catch(function(){});
-      });
-      // 只有“已有 controller”（即不是首次安装）时才自动刷新，避免首次打开就闪一下
-      if (navigator.serviceWorker.controller) {
-        var refreshing = false;
-        navigator.serviceWorker.addEventListener('controllerchange', function(){
-          if (refreshing) return;
-          refreshing = true;
-          window.location.reload();
-        });
-      }
-    }).catch(function(){});
-  });
-}
 </script>
 </body>
+<a href="/" style="position:fixed;top:8px;left:8px;z-index:99999;padding:6px 12px;border-radius:999px;background:rgba(0,0,0,.55);color:#fff;font:14px/1 -apple-system,system-ui,sans-serif;text-decoration:none;backdrop-filter:blur(6px);">← 工具箱</a>
 </html>
