@@ -20,5 +20,12 @@ window.TOOLS = [
     desc: '另一个小工具',
     icon: 'tools/tool-b/icon.svg',
     url: 'tools/tool-b/index.html'
+  },
+  {
+    id: 'tool-c',
+    name: '攒钱记录',
+    desc: '另一个小工具',
+    icon: 'tools/tool-c/icon.svg',
+    url: 'tools/tool-c/index.html'
   }
 ];
