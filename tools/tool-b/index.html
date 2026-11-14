@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#f7fbf8">
-<link rel="manifest" href="./manifest.json">
 <link rel="icon" type="image/svg+xml" href="./icon.svg">
 <link rel="apple-touch-icon" sizes="180x180" href="./icon.svg">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1077,39 +1076,8 @@
     } catch (e) { /* 失败则保留 SVG 兜底 */ }
   }
   buildAppleTouchIcon();
-
-  /* ============================================================
-     PWA ②：注册 Service Worker + 自动更新
-     ============================================================ */
-  if ('serviceWorker' in navigator) {
-    var refreshing = false;
-    var hadController = !!navigator.serviceWorker.controller;
-
-    // 新 SW 接管时自动刷新（首次安装不刷新，避免闪一下）
-    navigator.serviceWorker.addEventListener('controllerchange', function () {
-      if (!hadController) { hadController = true; return; }
-      if (refreshing) return;
-      refreshing = true;
-      location.reload();
-    });
-
-    window.addEventListener('load', function () {
-      navigator.serviceWorker.register('./service-worker.js').then(function (reg) {
-        // 启动时主动查一次
-        try { reg.update(); } catch (e) {}
-
-        // 每次回到前台再查一次（PWA 常驻后台时很关键）
-        document.addEventListener('visibilitychange', function () {
-          if (!document.hidden) {
-            try { reg.update(); } catch (e) {}
-          }
-        });
-      }).catch(function () {
-        /* 注册失败（如非 HTTPS）静默忽略 */
-      });
-    });
-  }
 })();
 </script>
 </body>
+<a href="/" style="position:fixed;top:8px;left:8px;z-index:99999;padding:6px 12px;border-radius:999px;background:rgba(0,0,0,.55);color:#fff;font:14px/1 -apple-system,system-ui,sans-serif;text-decoration:none;backdrop-filter:blur(6px);">← 工具箱</a>
 </html>
