@@ -1,0 +1,13 @@
+[build]
+  publish = "."
+
+# Service Worker 不能被强缓存，否则更新不生效
+[[headers]]
+  for = "/service-worker.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/manifest.json"
+  [headers.values]
+    Content-Type = "application/manifest+json"
