@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>家庭资产负债管理中心</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 移动端苹果设备优化及PWA关联 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="apple-touch-icon" href="icon.svg">
+    <link rel="manifest" href="/manifest.json">
+
+    <script>
+        // 注册 PWA Service Worker（增加协议判断，避免本地 file:// 协议报错）
+        if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(reg => console.log('Service Worker 注册成功:', reg.scope))
+                    .catch(err => console.log('Service Worker 注册失败:', err));
+            });
+        }
+    </script>
+
+    <style>
+        :root {
+            --primary-color: #0284c7;
+            --primary-light: #e0f2fe;
+            --success-color: #10b981;
+            --success-light: #d1fae5;
+            --danger-color: #ef4444;
+            --danger-light: #fee2e2;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --bg-main: #f8fafc;
+            --card-bg: #ffffff;
+            --border-color: #e2e8f0;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            padding: 16px;
+            padding-bottom: 60px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        /* 顶部标题栏 */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        header h1 {
+            font-size: 20px;
+            color: #0f172a;
+            font-weight: 700;
+        }
+
+        .header-btns {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-action {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background-color: var(--card-bg);
+            cursor: pointer;
+            font-size: 12px;
+            color: var(--text-muted);
+            transition: all 0.2s;
+        }
+        .btn-action:hover {
+            background-color: #f1f5f9;
+            color: var(--text-main);
+        }
+
+        /* 看板网格 */
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        @media (max-width: 640px) {
+            .dashboard {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 6px;
+            }
+            .card-stat {
+                padding: 10px 6px !important;
+                border-left-width: 3px !important;
+            }
+            .stat-label {
+                font-size: 10px !important;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .stat-value {
+                font-size: 12px !important;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+        }
+
+        .card-stat {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 1px 3px 0 rgba(0,0,0,0.05), 0 1px 2px -1px rgba(0,0,0,0.05);
+            border-left: 4px solid var(--primary-color);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card-stat.asset { border-left-color: var(--primary-color); }
+        .card-stat.debt { border-left-color: var(--danger-color); }
+        .card-stat.net { border-left-color: var(--success-color); }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .stat-value.asset-val { color: var(--primary-color); }
+        .stat-value.debt-val { color: var(--danger-color); }
+        .stat-value.net-val { color: var(--success-color); }
+
+        /* 通用卡片样式 */
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -2px rgba(0,0,0,0.05);
+            border: 1px solid #f1f5f9;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #334155;
+        }
+
+        /* 表单网格排版 */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .form-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (max-width: 480px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .form-group label {
+            font-size: 12px;
+            font-weight: 500;
+            color: #475569;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: #ffffff;
+            font-size: 14px;
+            color: var(--text-main);
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px var(--primary-light);
+        }
+
+        .form-control-debt:focus {
+            border-color: var(--danger-color);
+            box-shadow: 0 0 0 3px var(--danger-light);
+        }
+
+        .btn-submit {
+            grid-column: 1 / -1;
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
+            color: #ffffff;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            text-align: center;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        .btn-submit.asset-btn {
+            background-color: var(--primary-color);
+        }
+        .btn-submit.debt-btn {
+            background-color: var(--danger-color);
+        }
+        .btn-submit:hover {
+            opacity: 0.9;
+        }
+        .btn-submit:active {
+            opacity: 0.8;
+        }
+
+        .btn-cancel {
+            grid-column: 1 / -1;
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: #f1f5f9;
+            color: var(--text-muted);
+            font-weight: 500;
+            cursor: pointer;
+            text-align: center;
+            font-size: 13px;
+            margin-top: 4px;
+            display: none;
+        }
+        .btn-cancel:hover {
+            background-color: #e2e8f0;
+            color: var(--text-main);
+        }
+
+        /* 选项卡 Tab 样式 */
+        .tab-container {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+
+        .tab-btn {
+            padding: 6px 16px;
+            border-radius: 20px;
+            border: none;
+            background-color: #f1f5f9;
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            background-color: var(--text-main);
+            color: #ffffff;
+        }
+
+        /* 图表容器 */
+        .chart-wrapper {
+            max-width: 320px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        /* 表格排版 */
+        .table-wrapper {
+            width: 100%;
+            overflow-x: auto;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 13px;
+        }
+
+        th {
+            background-color: #f8fafc;
+            color: #475569;
+            font-weight: 600;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-color);
+            color: #334155;
+            white-space: nowrap;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background-color: #f8fafc;
+        }
+
+        .action-btns {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .btn-edit {
+            background: none;
+            border: 1px solid var(--border-color);
+            color: var(--primary-color);
+            cursor: pointer;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background-color: #f8fafc;
+        }
+        .btn-edit:hover {
+            background-color: var(--primary-light);
+        }
+
+        .btn-delete {
+            background: none;
+            border: 1px solid var(--border-color);
+            color: var(--danger-color);
+            cursor: pointer;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background-color: #f8fafc;
+        }
+        .btn-delete:hover {
+            background-color: var(--danger-light);
+        }
+
+        /* 隐藏提示 */
+        .empty-tip {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 20px;
+            font-style: italic;
+        }
+
+        /* 数据明细区域的内部分类Tab */
+        .detail-tabs {
+            display: flex;
+            margin-bottom: 12px;
+            background-color: #f1f5f9;
+            padding: 4px;
+            border-radius: 8px;
+            width: fit-content;
+        }
+        .detail-tab {
+            padding: 6px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+        .detail-tab.active {
+            background-color: #ffffff;
+            color: var(--text-main);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>家庭资产负债管理中心</h1>
+        <div class="header-btns">
+            <button class="btn-action" onclick="exportData()">导出数据</button>
+            <button class="btn-action" onclick="importDataClick()">导入数据</button>
+            <input type="file" id="fileInput" accept=".json,application/json" style="display: none;" onchange="handleImport(event)">
+            <button class="btn-action" onclick="clearAllData()" style="color: var(--danger-color);">重置</button>
+        </div>
+    </header>
+
+    <div class="dashboard">
+        <div class="card-stat asset">
+            <div class="stat-label">家庭资产总额</div>
+            <div class="stat-value asset-val" id="totalAssets">0.00</div>
+        </div>
+        <div class="card-stat debt">
+            <div class="stat-label">家庭负债总额</div>
+            <div class="stat-value debt-val" id="totalDebts">0.00</div>
+        </div>
+        <div class="card-stat net">
+            <div class="stat-label">家庭净资产</div>
+            <div class="stat-value net-val" id="netAssets">0.00</div>
+        </div>
+    </div>
+
+    <!-- 资产登记模块 -->
+    <div class="card" id="assetCard" style="margin-bottom: 16px;">
+        <div class="card-title" style="color: var(--primary-color); cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0;" onclick="toggleForm('assetFormGrid', this)">
+            <span id="assetFormTitle">➕ 资产登记</span>
+            <span class="toggle-arrow" style="font-size: 12px; color: var(--text-muted);">▶</span>
+        </div>
+        <div class="form-grid" id="assetFormGrid" style="display: none; margin-top: 16px;">
+            <div class="form-group">
+                <label>家庭成员</label>
+                <input type="text" id="assetMember" class="form-control" list="listMembers" placeholder="可选择或手打输入">
+            </div>
+            <div class="form-group">
+                <label>资产名称</label>
+                <input type="text" id="assetName" class="form-control" list="listAssetNames" placeholder="例如: 招商银行/微信支付">
+            </div>
+            <div class="form-group">
+                <label>资产类别</label>
+                <input type="text" id="assetCategory" class="form-control" list="listAssetCategories" placeholder="例如: 短期资金/固定资产">
+            </div>
+            <div class="form-group">
+                <label>金额 (元)</label>
+                <input type="number" id="assetAmount" class="form-control" placeholder="请输入数字金额" step="0.01">
+            </div>
+            <div class="form-group">
+                <label>当前统计日期</label>
+                <input type="date" id="assetDate" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>备注</label>
+                <input type="text" id="assetRemark" class="form-control" placeholder="可选填备注信息">
+            </div>
+            <button type="button" class="btn-submit asset-btn" id="assetSubmitBtn" onclick="saveRecord('asset')">保存资产记录</button>
+            <button type="button" class="btn-cancel" id="assetCancelBtn" onclick="cancelEdit('asset')">取消编辑</button>
+        </div>
+    </div>
+
+    <!-- 负债登记模块 -->
+    <div class="card" id="debtCard" style="margin-bottom: 16px;">
+        <div class="card-title" style="color: var(--danger-color); cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0;" onclick="toggleForm('debtFormGrid', this)">
+            <span id="debtFormTitle">➖ 负债登记</span>
+            <span class="toggle-arrow" style="font-size: 12px; color: var(--text-muted);">▶</span>
+        </div>
+        <div class="form-grid" id="debtFormGrid" style="display: none; margin-top: 16px;">
+            <div class="form-group">
+                <label>家庭成员</label>
+                <input type="text" id="debtMember" class="form-control" list="listMembers" placeholder="可选择或手打输入">
+            </div>
+            <div class="form-group">
+                <label>负债名称</label>
+                <input type="text" id="debtName" class="form-control-debt form-control" list="listDebtNames" placeholder="例如: 招行信用卡/微粒贷">
+            </div>
+            <div class="form-group">
+                <label>负债类别</label>
+                <input type="text" id="debtCategory" class="form-control-debt form-control" list="listDebtCategories" placeholder="例如: 信用卡/网贷/房贷">
+            </div>
+            <div class="form-group">
+                <label>金额 (元)</label>
+                <input type="number" id="debtAmount" class="form-control" placeholder="请输入数字金额" step="0.01">
+            </div>
+            <div class="form-group">
+                <label>当前统计日期</label>
+                <input type="date" id="debtDate" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>备注</label>
+                <input type="text" id="debtRemark" class="form-control" placeholder="可选填备注信息">
+            </div>
+            <button type="button" class="btn-submit debt-btn" id="debtSubmitBtn" onclick="saveRecord('debt')">保存负债记录</button>
+            <button type="button" class="btn-cancel" id="debtCancelBtn" onclick="cancelEdit('debt')">取消编辑</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">📊 资产结构分析 (不含负债)</div>
+        <div class="tab-container">
+            <button class="tab-btn active" id="tabMember" onclick="switchChartTab('member')">按家庭成员</button>
+            <button class="tab-btn" id="tabName" onclick="switchChartTab('name')">按资产名称</button>
+            <button class="tab-btn" id="tabCategory" onclick="switchChartTab('category')">按资产类别</button>
+        </div>
+        <div class="chart-wrapper">
+            <canvas id="assetChart"></canvas>
+            <div id="chartEmptyTip" class="empty-tip" style="display: none;">暂无资产数据，无法生成分析图表</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">📋 账目数据明细</div>
+        <div class="detail-tabs">
+            <div class="detail-tab active" id="detailTabAsset" onclick="switchDetailTab('asset')">资产明细表</div>
+            <div class="detail-tab" id="detailTabDebt" onclick="switchDetailTab('debt')">负债明细表</div>
+        </div>
+
+        <div id="tableAssetContainer" class="table-wrapper">
+            <table id="assetTable">
+                <thead>
+                    <tr>
+                        <th>家庭成员</th>
+                        <th>资产名称</th>
+                        <th>资产类别</th>
+                        <th>金额 (元)</th>
+                        <th>统计日期</th>
+                        <th>备注</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="assetTableBody"></tbody>
+            </table>
+            <div id="assetEmpty" class="empty-tip">暂无资产记录</div>
+        </div>
+
+        <div id="tableDebtContainer" class="table-wrapper" style="display: none;">
+            <table id="debtTable">
+                <thead>
+                    <tr>
+                        <th>家庭成员</th>
+                        <th>负债名称</th>
+                        <th>负债类别</th>
+                        <th>金额 (元)</th>
+                        <th>统计日期</th>
+                        <th>备注</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="debtTableBody"></tbody>
+            </table>
+            <div id="debtEmpty" class="empty-tip">暂无负债记录</div>
+        </div>
+    </div>
+</div>
+
+<datalist id="listMembers"></datalist>
+<datalist id="listAssetNames"></datalist>
+<datalist id="listAssetCategories"></datalist>
+<datalist id="listDebtNames"></datalist>
+<datalist id="listDebtCategories"></datalist>
+
+<script>
+    // 系统的核心底层状态数据结构
+    let state = {
+        assets: [],
+        debts: [],
+        options: {
+            members: ['老公', '老婆'],
+            assetNames: ['活钱', '基金', '股票', '现金', '房产', '车辆'],
+            assetCategories: ['短期资金', '中期资金', '长期资金', '固定资产'],
+            debtNames: ['房贷', '车贷'],
+            debtCategories: ['银行', '信用卡', '借呗']
+        }
+    };
+
+    // 编辑状态追踪
+    let editingAssetId = null;
+    let editingDebtId = null;
+
+    let currentChartDimension = 'member'; // member, name, category
+    let currentDetailTab = 'asset';       // asset, debt
+    let chartInstance = null;             // Chart.js 实例
+
+    window.onload = function() {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('assetDate').value = today;
+        document.getElementById('debtDate').value = today;
+
+        loadFromLocalStorage();
+        refreshUI();
+    };
+
+    function saveToLocalStorage() {
+        localStorage.setItem('family_finance_state', JSON.stringify(state));
+    }
+
+    function loadFromLocalStorage() {
+        const localData = localStorage.getItem('family_finance_state');
+        if (localData) {
+            try {
+                const parsed = JSON.parse(localData);
+                if (parsed.assets && Array.isArray(parsed.assets)) state.assets = parsed.assets;
+                if (parsed.debts && Array.isArray(parsed.debts)) state.debts = parsed.debts;
+                if (parsed.options) {
+                    state.options.members = Array.from(new Set([...state.options.members, ...(parsed.options.members || [])]));
+                    state.options.assetNames = Array.from(new Set([...state.options.assetNames, ...(parsed.options.assetNames || [])]));
+                    state.options.assetCategories = Array.from(new Set([...state.options.assetCategories, ...(parsed.options.assetCategories || [])]));
+                    state.options.debtNames = Array.from(new Set([...state.options.debtNames, ...(parsed.options.debtNames || [])]));
+                    state.options.debtCategories = Array.from(new Set([...state.options.debtCategories, ...(parsed.options.debtCategories || [])]));
+                }
+            } catch (e) {
+                console.error("加载本地缓存数据失败", e);
+            }
+        }
+    }
+
+    function toggleForm(gridId, titleElement) {
+        const grid = document.getElementById(gridId);
+        const arrow = titleElement.querySelector('.toggle-arrow');
+        if (grid.style.display === 'none') {
+            grid.style.display = 'grid';
+            arrow.innerText = '▼';
+            titleElement.style.marginBottom = '16px';
+        } else {
+            grid.style.display = 'none';
+            arrow.innerText = '▶';
+            titleElement.style.marginBottom = '0';
+        }
+    }
+
+    function refreshUI() {
+        updateDashboard();
+        updateDatalists();
+        renderTables();
+        renderChart();
+    }
+
+    // 1. 看板数值统计（增加浮点数四舍五入防精度溢出）
+    function updateDashboard() {
+        let totalAssetsSum = state.assets.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+        let totalDebtsSum = state.debts.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+        let netAssetsSum = Math.round((totalAssetsSum - totalDebtsSum) * 100) / 100;
+
+        document.getElementById('totalAssets').innerText = totalAssetsSum.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        document.getElementById('totalDebts').innerText = totalDebtsSum.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        document.getElementById('netAssets').innerText = netAssetsSum.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function updateDatalists() {
+        const currentMembers = Array.from(new Set([...state.options.members, ...state.assets.map(a => a.member), ...state.debts.map(d => d.member)]));
+        const currentAssetNames = Array.from(new Set([...state.options.assetNames, ...state.assets.map(a => a.name)]));
+        const currentAssetCats = Array.from(new Set([...state.options.assetCategories, ...state.assets.map(a => a.category)]));
+        const currentDebtNames = Array.from(new Set([...state.options.debtNames, ...state.debts.map(d => d.name)]));
+        const currentDebtCats = Array.from(new Set([...state.options.debtCategories, ...state.debts.map(d => d.category)]));
+
+        bindDatalist('listMembers', currentMembers);
+        bindDatalist('listAssetNames', currentAssetNames);
+        bindDatalist('listAssetCategories', currentAssetCats);
+        bindDatalist('listDebtNames', currentDebtNames);
+        bindDatalist('listDebtCategories', currentDebtCats);
+    }
+
+    function bindDatalist(elementId, items) {
+        const datalist = document.getElementById(elementId);
+        if (!datalist) return;
+        datalist.innerHTML = '';
+        items.forEach(item => {
+            if (item && item.trim() !== '') {
+                let opt = document.createElement('option');
+                opt.value = item;
+                datalist.appendChild(opt);
+            }
+        });
+    }
+
+    // 2. 统一的数据保存与更新函数 (支持新增或编辑保存)
+    function saveRecord(type) {
+        const isAsset = type === 'asset';
+        const prefix = isAsset ? 'asset' : 'debt';
+        const editingId = isAsset ? editingAssetId : editingDebtId;
+
+        const memberInput = document.getElementById(prefix + 'Member');
+        const nameInput = document.getElementById(prefix + 'Name');
+        const categoryInput = document.getElementById(prefix + 'Category');
+        const amountInput = document.getElementById(prefix + 'Amount');
+        const dateInput = document.getElementById(prefix + 'Date');
+        const remarkInput = document.getElementById(prefix + 'Remark');
+
+        const member = memberInput.value.trim();
+        const name = nameInput.value.trim();
+        const category = categoryInput.value.trim();
+        const amountStr = amountInput.value.trim();
+        const date = dateInput.value;
+        const remark = remarkInput.value.trim();
+
+        const typeLabel = isAsset ? '资产' : '负债';
+
+        if (!member || !name || !category || !amountStr || !date) {
+            alert(`请完整填写必填项信息（家庭成员、${typeLabel}名称、${typeLabel}类别、金额、统计日期）！`);
+            return;
+        }
+
+        const amount = parseFloat(amountStr);
+        if (isNaN(amount) || amount <= 0) {
+            alert('请输入大于 0 的有效数字金额！');
+            return;
+        }
+
+        const formattedAmount = Math.round(amount * 100) / 100;
+
+        if (editingId) {
+            // 编辑更新模式
+            const list = isAsset ? state.assets : state.debts;
+            const index = list.findIndex(item => item.id === editingId);
+            if (index !== -1) {
+                list[index] = {
+                    ...list[index],
+                    member,
+                    name,
+                    category,
+                    amount: formattedAmount,
+                    date,
+                    remark
+                };
+            }
+            cancelEdit(type);
+            alert(`${typeLabel}记录更新成功！`);
+        } else {
+            // 新增记录模式
+            const record = {
+                id: prefix + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                member,
+                name,
+                category,
+                amount: formattedAmount,
+                date,
+                remark
+            };
+
+            if (isAsset) {
+                state.assets.push(record);
+                if (!state.options.assetNames.includes(name)) state.options.assetNames.push(name);
+                if (!state.options.assetCategories.includes(category)) state.options.assetCategories.push(category);
+            } else {
+                state.debts.push(record);
+                if (!state.options.debtNames.includes(name)) state.options.debtNames.push(name);
+                if (!state.options.debtCategories.includes(category)) state.options.debtCategories.push(category);
+            }
+
+            memberInput.value = '';
+            nameInput.value = '';
+            categoryInput.value = '';
+            amountInput.value = '';
+            remarkInput.value = '';
+
+            alert(`${typeLabel}记录保存成功！`);
+        }
+
+        if (!state.options.members.includes(member)) state.options.members.push(member);
+
+        saveToLocalStorage();
+        refreshUI();
+    }
+
+    // 3. 进入编辑模式
+    function editRecord(type, id) {
+        const isAsset = type === 'asset';
+        const list = isAsset ? state.assets : state.debts;
+        const record = list.find(item => item.id === id);
+        if (!record) return;
+
+        if (isAsset) {
+            editingAssetId = id;
+            document.getElementById('assetMember').value = record.member;
+            document.getElementById('assetName').value = record.name;
+            document.getElementById('assetCategory').value = record.category;
+            document.getElementById('assetAmount').value = record.amount;
+            document.getElementById('assetDate').value = record.date;
+            document.getElementById('assetRemark').value = record.remark || '';
+
+            document.getElementById('assetFormTitle').innerText = '✏️ 编辑资产记录';
+            document.getElementById('assetSubmitBtn').innerText = '更新资产记录';
+            document.getElementById('assetCancelBtn').style.display = 'block';
+
+            // 确保表单展开
+            const grid = document.getElementById('assetFormGrid');
+            if (grid.style.display === 'none') {
+                grid.style.display = 'grid';
+                document.querySelector('#assetCard .toggle-arrow').innerText = '▼';
+                document.querySelector('#assetCard .card-title').style.marginBottom = '16px';
+            }
+            document.getElementById('assetCard').scrollIntoView({ behavior: 'smooth' });
+        } else {
+            editingDebtId = id;
+            document.getElementById('debtMember').value = record.member;
+            document.getElementById('debtName').value = record.name;
+            document.getElementById('debtCategory').value = record.category;
+            document.getElementById('debtAmount').value = record.amount;
+            document.getElementById('debtDate').value = record.date;
+            document.getElementById('debtRemark').value = record.remark || '';
+
+            document.getElementById('debtFormTitle').innerText = '✏️ 编辑负债记录';
+            document.getElementById('debtSubmitBtn').innerText = '更新负债记录';
+            document.getElementById('debtCancelBtn').style.display = 'block';
+
+            // 确保表单展开
+            const grid = document.getElementById('debtFormGrid');
+            if (grid.style.display === 'none') {
+                grid.style.display = 'grid';
+                document.querySelector('#debtCard .toggle-arrow').innerText = '▼';
+                document.querySelector('#debtCard .card-title').style.marginBottom = '16px';
+            }
+            document.getElementById('debtCard').scrollIntoView({ behavior: 'smooth' });
+        }
+    }
+
+    // 4. 取消编辑
+    function cancelEdit(type) {
+        const isAsset = type === 'asset';
+        const prefix = isAsset ? 'asset' : 'debt';
+
+        if (isAsset) {
+            editingAssetId = null;
+            document.getElementById('assetFormTitle').innerText = '➕ 资产登记';
+            document.getElementById('assetSubmitBtn').innerText = '保存资产记录';
+            document.getElementById('assetCancelBtn').style.display = 'none';
+        } else {
+            editingDebtId = null;
+            document.getElementById('debtFormTitle').innerText = '➖ 负债登记';
+            document.getElementById('debtSubmitBtn').innerText = '保存负债记录';
+            document.getElementById('debtCancelBtn').style.display = 'none';
+        }
+
+        document.getElementById(prefix + 'Member').value = '';
+        document.getElementById(prefix + 'Name').value = '';
+        document.getElementById(prefix + 'Category').value = '';
+        document.getElementById(prefix + 'Amount').value = '';
+        document.getElementById(prefix + 'Remark').value = '';
+        document.getElementById(prefix + 'Date').value = new Date().toISOString().split('T')[0];
+    }
+
+    // 5. 渲染表格（带有编辑和删除按钮）
+    function renderTables() {
+        renderSingleTable('asset', state.assets, 'assetTableBody', 'assetEmpty', 'var(--primary-color)', '#f1f5f9');
+        renderSingleTable('debt', state.debts, 'debtTableBody', 'debtEmpty', 'var(--danger-color)', '#fee2e2', '#b91c1c');
+    }
+
+    function renderSingleTable(type, dataList, bodyId, emptyId, amountColor, catBgColor, catTextColor = '#334155') {
+        const body = document.getElementById(bodyId);
+        const emptyTip = document.getElementById(emptyId);
+        body.innerHTML = '';
+
+        if (dataList.length === 0) {
+            emptyTip.style.display = 'block';
+        } else {
+            emptyTip.style.display = 'none';
+            const sorted = [...dataList].sort((a, b) => new Date(b.date) - new Date(a.date));
+            sorted.forEach(item => {
+                let tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${escapeHtml(item.member)}</td>
+                    <td>${escapeHtml(item.name)}</td>
+                    <td><span style="background-color: ${catBgColor}; color: ${catTextColor}; padding: 2px 6px; border-radius: 4px; font-size:11px;">${escapeHtml(item.category)}</span></td>
+                    <td style="font-weight:600; color: ${amountColor}">${Number(item.amount).toLocaleString('zh-CN', {minimumFractionDigits:2})}</td>
+                    <td>${item.date}</td>
+                    <td style="color:var(--text-muted); font-size:12px; max-width:150px; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(item.remark || '')}">${escapeHtml(item.remark || '-')}</td>
+                    <td>
+                        <div class="action-btns">
+                            <button class="btn-edit" onclick="editRecord('${type}', '${item.id}')">编辑</button>
+                            <button class="btn-delete" onclick="deleteRecord('${type}', '${item.id}')">✕</button>
+                        </div>
+                    </td>
+                `;
+                body.appendChild(tr);
+            });
+        }
+    }
+
+    function switchDetailTab(type) {
+        currentDetailTab = type;
+        document.getElementById('detailTabAsset').classList.toggle('active', type === 'asset');
+        document.getElementById('detailTabDebt').classList.toggle('active', type === 'debt');
+        document.getElementById('tableAssetContainer').style.display = (type === 'asset') ? 'block' : 'none';
+        document.getElementById('tableDebtContainer').style.display = (type === 'debt') ? 'block' : 'none';
+    }
+
+    function deleteRecord(type, id) {
+        if (!confirm('确定要彻底删除该条记账记录吗？')) return;
+
+        if (type === 'asset') {
+            if (editingAssetId === id) cancelEdit('asset');
+            state.assets = state.assets.filter(item => item.id !== id);
+        } else if (type === 'debt') {
+            if (editingDebtId === id) cancelEdit('debt');
+            state.debts = state.debts.filter(item => item.id !== id);
+        }
+
+        saveToLocalStorage();
+        refreshUI();
+    }
+
+    // 6. 图表渲染与百分比计算防错
+    function switchChartTab(dimension) {
+        currentChartDimension = dimension;
+        document.getElementById('tabMember').classList.toggle('active', dimension === 'member');
+        document.getElementById('tabName').classList.toggle('active', dimension === 'name');
+        document.getElementById('tabCategory').classList.toggle('active', dimension === 'category');
+        renderChart();
+    }
+
+    function renderChart() {
+        const canvas = document.getElementById('assetChart');
+        const emptyTip = document.getElementById('chartEmptyTip');
+
+        if (state.assets.length === 0) {
+            canvas.style.display = 'none';
+            emptyTip.style.display = 'block';
+            if (chartInstance) {
+                chartInstance.destroy();
+                chartInstance = null;
+            }
+            return;
+        }
+
+        canvas.style.display = 'block';
+        emptyTip.style.display = 'none';
+
+        let groupData = {};
+        state.assets.forEach(item => {
+            let key = '';
+            if (currentChartDimension === 'member') key = item.member || '未定义';
+            else if (currentChartDimension === 'name') key = item.name || '未定义';
+            else if (currentChartDimension === 'category') key = item.category || '未定义';
+
+            if (!groupData[key]) groupData[key] = 0;
+            groupData[key] += Number(item.amount || 0);
+        });
+
+        let labels = Object.keys(groupData);
+        let values = Object.values(groupData);
+
+        if (chartInstance) {
+            chartInstance.destroy();
+        }
+
+        const colorPalette = [
+            '#0284c7', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', 
+            '#3b82f6', '#14b8a6', '#f97316', '#6366f1', '#a855f7'
+        ];
+
+        chartInstance = new Chart(canvas, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: colorPalette.slice(0, labels.length),
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: 12,
+                            padding: 12,
+                            font: { size: 11 }
+                        },
+                        onClick: function(e, legendItem, legend) {
+                            const index = legendItem.index;
+                            legend.chart.toggleDataVisibility(index);
+                            legend.chart.update();
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(255, 255, 255, 1)',
+                        titleColor: '#1e293b',
+                        bodyColor: '#334155',
+                        borderColor: '#e2e8f0',
+                        borderWidth: 1,
+                        padding: 10,
+                        boxPadding: 4,
+                        usePointStyle: true,
+                        callbacks: {
+                            label: function(context) {
+                                let total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                let value = context.raw;
+                                let percentage = total > 0 ? ((value / total) * 100).toFixed(2) : 0;
+                                return ` ${context.label}: ${value.toLocaleString('zh-CN')} 元 (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            },
+            plugins: [{
+                id: 'centerTotalPlugin',
+                afterDraw: function(chart) {
+                    if (chart.config.type !== 'doughnut') return;
+                    const { ctx, chartArea } = chart;
+                    if (!chartArea) return;
+
+                    const centerX = (chartArea.left + chartArea.right) / 2;
+                    const centerY = (chartArea.top + chartArea.bottom) / 2;
+
+                    ctx.save();
+                    
+                    ctx.font = "11px -apple-system, BlinkMacSystemFont, sans-serif";
+                    ctx.fillStyle = "#64748b";
+                    ctx.textBaseline = "middle";
+                    ctx.textAlign = "center";
+                    ctx.fillText("选中资产总额", centerX, centerY - 10);
+
+                    let currentVisibleTotal = 0;
+                    const dataset = chart.data.datasets[0];
+                    dataset.data.forEach((val, i) => {
+                        if (chart.getDataVisibility(i)) {
+                            currentVisibleTotal += Number(val || 0);
+                        }
+                    });
+
+                    ctx.font = "bold 13px -apple-system, BlinkMacSystemFont, sans-serif";
+                    ctx.fillStyle = "#1e293b";
+                    ctx.fillText(currentVisibleTotal.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " 元", centerX, centerY + 10);
+                    
+                    ctx.restore();
+                }
+            }]
+        });
+    }
+
+    // 7. 数据导入导出与重置（增加 JSON 解析防错）
+    function exportData() {
+        if (state.assets.length === 0 && state.debts.length === 0) {
+            alert('当前系统中无任何记账数据可供导出！');
+            return;
+        }
+        
+        const dataStr = JSON.stringify(state, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json;charset=utf-8' });
+        const downloadAnchor = document.createElement('a');
+        
+        downloadAnchor.href = URL.createObjectURL(blob);
+        downloadAnchor.download = `家庭资产负债备份数据_${new Date().toISOString().split('T')[0]}.json`;
+        
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+        
+        setTimeout(() => {
+            URL.revokeObjectURL(downloadAnchor.href);
+        }, 1000);
+    }
+
+    function importDataClick() {
+        document.getElementById('fileInput').click();
+    }
+
+    function handleImport(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            try {
+                const parsed = JSON.parse(evt.target.result);
+                if (parsed && (Array.isArray(parsed.assets) || Array.isArray(parsed.debts))) {
+                    if (parsed.assets) state.assets = parsed.assets;
+                    if (parsed.debts) state.debts = parsed.debts;
+                    if (parsed.options) state.options = parsed.options;
+                    
+                    cancelEdit('asset');
+                    cancelEdit('debt');
+                    saveToLocalStorage();
+                    refreshUI();
+                    alert('数据备份文件已成功导入并恢复！');
+                } else {
+                    alert('导入失败：文件格式不符合家庭资产负债的数据规范！');
+                }
+            } catch (err) {
+                alert('读取或解析数据文件发生错误，请检查 JSON 文件是否受损！');
+            }
+            e.target.value = '';
+        };
+        reader.readAsText(file);
+    }
+
+    function clearAllData() {
+        if (!confirm('警告：此操作将永久清空您设备本地保存的所有资产和负债记录！确认重置吗？')) return;
+        state.assets = [];
+        state.debts = [];
+        cancelEdit('asset');
+        cancelEdit('debt');
+        saveToLocalStorage();
+        refreshUI();
+        alert('本地账目数据库已全部重置清空！');
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, "&amp;")
+                          .replace(/</g, "&lt;")
+                          .replace(/>/g, "&gt;")
+                          .replace(/"/g, "&quot;")
+                          .replace(/'/g, "&#039;");
+    }
+</script>
+</body>
+</html>
