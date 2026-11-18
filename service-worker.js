@@ -1,5 +1,5 @@
 /* 工具箱 Service Worker */
-const VERSION = 'v2';                          // 每次发布更新时改这里
+const VERSION = 'v3';                          // 每次发布更新时改这里
 const SHELL_CACHE = `toolbox-shell-${VERSION}`;
 const RUNTIME_CACHE = `toolbox-runtime-${VERSION}`;
 
