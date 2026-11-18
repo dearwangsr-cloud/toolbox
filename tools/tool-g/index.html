@@ -50,7 +50,8 @@
                 <button onclick="document.getElementById('importFile').click()" class="p-2 hover:bg-indigo-700 rounded-lg transition" title="恢复数据">
                     <i class="fa-solid fa-upload"></i>
                 </button>
-                <input type="file" id="importFile" accept=".json" class="hidden" onchange="importData(event)">
+                <!-- 修复：放宽 accept，避免部分移动端浏览器将 .json 文件置灰无法选中 -->
+                <input type="file" id="importFile" accept=".json,application/json,text/json,text/plain,application/octet-stream" class="hidden" onchange="importData(event)">
             </div>
         </div>
     </header>
@@ -920,17 +921,30 @@
         }
 
         // --- 5. 数据导入与导出功能 ---
+        // 修复：改用标准 Blob + application/json，让下载文件的 MIME 类型更规范，兼容移动端文件选择器
         function exportData() {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData, null, 2));
+            const jsonStr = JSON.stringify(appData, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
             const downloadAnchor = document.createElement('a');
-            downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", `指数记录工具备份_${new Date().toISOString().slice(0,10)}.json`);
+            downloadAnchor.href = url;
+            downloadAnchor.download = `指数记录工具备份_${new Date().toISOString().slice(0,10)}.json`;
             document.body.appendChild(downloadAnchor);
             downloadAnchor.click();
             downloadAnchor.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 200);
         }
 
+        // 修复：
+        // 1) 加空值保护
+        // 2) 导入结束后重置 input.value，避免同文件第二次导入不触发 onchange
+        // 3) 加读取失败提示
         function importData(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) {
+                event.target.value = '';
+                return;
+            }
             const fileReader = new FileReader();
             fileReader.onload = function(e) {
                 try {
@@ -947,7 +961,12 @@
                     alert('导入失败，文件格式错误！');
                 }
             };
-            fileReader.readAsText(event.target.files[0]);
+            fileReader.onerror = function() {
+                alert('文件读取失败，请重试！');
+            };
+            fileReader.readAsText(file);
+            // 重置，确保同一文件可重复选择导入
+            event.target.value = '';
         }
 
         // 辅助转义函数
