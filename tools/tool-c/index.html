@@ -1158,7 +1158,7 @@ document.addEventListener('click', e => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'savings-diary-' + todayStr() + '.json';
+    a.download = '理财数据' + todayStr() + '.json';
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
