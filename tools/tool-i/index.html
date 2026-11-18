@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
@@ -120,7 +120,7 @@ button {
 
 .active-tab {color:var(--primary);font-weight:bold;}
 
-#tagModal {
+#tagModal, #strategyModal {
   display:none;
   position:fixed;
   top:0;left:0;
@@ -131,10 +131,14 @@ button {
 
 .modal-box {
   background:#fff;
-  margin:20% auto;
+  margin:10% auto;
   padding:15px;
   border-radius:10px;
   width:90%;
+  max-width:520px;
+  max-height:78vh;
+  overflow-y:auto;
+  box-sizing:border-box;
 }
 
 #tagList { margin-bottom: 10px; }
@@ -146,6 +150,12 @@ input, textarea {
   padding: 8px;
   border: 1px solid #ddd;
   border-radius: 4px;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 120px;
+  font-family: inherit;
 }
 </style>
 </head>
@@ -176,6 +186,18 @@ input, textarea {
   </div>
 </div>
 
+<div id="strategyModal">
+  <div class="modal-box">
+    <h3 id="strategyModalTitle">新增策略</h3>
+    <input id="strategyTitleInput" placeholder="策略标题">
+    <textarea id="strategyContentInput" rows="8" placeholder="策略内容（支持多行）"></textarea>
+    <div style="text-align: right;">
+        <button onclick="confirmStrategy()">确定</button>
+        <button onclick="closeStrategyModal()" style="background:#ccc">取消</button>
+    </div>
+  </div>
+</div>
+
 <script>
 let data = JSON.parse(localStorage.getItem("financeData")) || {
   categories:[],
@@ -187,6 +209,7 @@ let currentTab="fund";
 let openMenu=null;
 let filterTags=[];
 let currentCatIndex=null;
+let editingStrategyIndex=null;
 
 /* ===== 核心逻辑：存储与刷新 ===== */
 function save(){
@@ -202,27 +225,21 @@ function save(){
  * @param {string} tag - 要删除的标签名称
  */
 function deleteTag(e, tag) {
-  e.stopPropagation(); // 阻止触发父元素的点击事件（如选中标签或筛选）
-  
+  e.stopPropagation();
+
   if (confirm(`确定要彻底删除标签 [${tag}] 吗？\n删除后，所有已关联该标签的基金也将不再显示此标签。`)) {
-    // 1. 从全局标签库中删除
     data.tags = data.tags.filter(t => t !== tag);
-    
-    // 2. 从当前筛选器中移除（如果已选中）
     filterTags = filterTags.filter(t => t !== tag);
-    
-    // 3. 遍历所有基金，移除关联的该标签
     data.categories.forEach(cat => {
       cat.funds.forEach(fund => {
         fund.tags = fund.tags.filter(t => t !== tag);
       });
     });
-    
-    // 4. 如果在弹窗内操作，需要重新生成弹窗内的标签列表
+
     if (document.getElementById("tagModal").style.display === "block") {
       updateModalTagList();
     }
-    
+
     save();
   }
 }
@@ -265,7 +282,6 @@ function openTagModal(i){
 function updateModalTagList() {
   let html="";
   data.tags.forEach(tag=>{
-    // 为弹窗内的标签也添加删除按钮
     html+=`
       <span class="tag-item" onclick="this.classList.toggle('active')">
         ${tag}
@@ -284,7 +300,6 @@ function confirmTag(){
   if(name===null || name.trim()==="") return;
 
   const selected=[...document.querySelectorAll("#tagList .active")].map(e=>{
-      // 提取纯文本，过滤掉子元素 <i> 的文本
       return e.childNodes[0].textContent.trim();
   });
   const newTag=document.getElementById("newTagInput").value.trim();
@@ -369,7 +384,6 @@ function renderFund(){
 
   data.tags.forEach(tag=>{
     const active=filterTags.includes(tag)?"active":"";
-    // 添加删除图标，并绑定 deleteTag 函数
     html+=`
       <span class="tag-item ${active}" onclick="toggleFilterTag('${tag}')">
         ${tag}
@@ -432,24 +446,66 @@ function renderFund(){
   return html;
 }
 
-/* ===== 策略渲染 ===== */
-function addStrategy(){
-  const title=prompt("标题");
-  if(!title) return;
-  const content=prompt("内容");
-  data.strategies.unshift({title,content,time:new Date().toLocaleString()});
+/* ===== 策略弹窗逻辑 ===== */
+function openStrategyModal(index){
+  editingStrategyIndex = (typeof index === "number") ? index : null;
+
+  const titleEl   = document.getElementById("strategyTitleInput");
+  const contentEl = document.getElementById("strategyContentInput");
+
+  if(editingStrategyIndex === null){
+    document.getElementById("strategyModalTitle").textContent = "新增策略";
+    titleEl.value = "";
+    contentEl.value = "";
+  }else{
+    const s = data.strategies[editingStrategyIndex];
+    document.getElementById("strategyModalTitle").textContent = "编辑策略";
+    titleEl.value = s.title;
+    contentEl.value = s.content || "";
+  }
+
+  document.getElementById("strategyModal").style.display = "block";
+  setTimeout(()=>titleEl.focus(), 50);
+}
+
+function closeStrategyModal(){
+  document.getElementById("strategyModal").style.display = "none";
+  editingStrategyIndex = null;
+}
+
+function confirmStrategy(){
+  const title   = document.getElementById("strategyTitleInput").value.trim();
+  const content = document.getElementById("strategyContentInput").value;
+
+  if(!title){
+    alert("请填写策略标题");
+    document.getElementById("strategyTitleInput").focus();
+    return;
+  }
+
+  if(editingStrategyIndex === null){
+    data.strategies.unshift({
+      title,
+      content,
+      time: new Date().toLocaleString()
+    });
+  }else{
+    const s = data.strategies[editingStrategyIndex];
+    s.title = title;
+    s.content = content;
+  }
+
+  closeStrategyModal();
   save();
 }
 
+/* ===== 策略渲染 ===== */
+function addStrategy(){
+  openStrategyModal(null);
+}
+
 function editStrategy(i){
-  let s=data.strategies[i];
-  let title=prompt("标题",s.title);
-  if(title===null || title.trim()==="") return;
-  let content=prompt("内容",s.content);
-  if(content===null) content=s.content;
-  s.title=title;
-  s.content=content;
-  save();
+  openStrategyModal(i);
 }
 
 function deleteStrategy(i){
