@@ -891,23 +891,55 @@ function drawHistoryChart(canvas, history){
 
   function drawSmooth(getY, strokeColor, fillColor){
     const pts = points.map(p => ({ x: p.x, y: getY(p) }));
-    const tension = 0.25;                 // 0~1，越小越平直；觉得过冲就调到 0.35
-    const getCP = i => {
-      if(i < 0) return pts[0];
-      if(i >= pts.length) return pts[pts.length - 1];
-      return pts[i];
-    };
-    function buildPath(){
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for(let i = 0; i < pts.length - 1; i++){
-        const p0 = getCP(i - 1), p1 = pts[i], p2 = pts[i + 1], p3 = getCP(i + 2);
-        const cp1x = p1.x + (p2.x - p0.x) / 6 * tension * 2;
-        const cp1y = p1.y + (p2.y - p0.y) / 6 * tension * 2;
-        const cp2x = p2.x - (p3.x - p1.x) / 6 * tension * 2;
-        const cp2y = p2.y - (p3.y - p1.y) / 6 * tension * 2;
-        ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+    const n = pts.length;
+    if (n < 2) return;
+
+    // —— 单调三次样条（Fritsch-Carlson），保证不过冲失真 ——
+    const dx = new Array(n - 1), m = new Array(n - 1);
+    for (let i = 0; i < n - 1; i++) {
+      dx[i] = pts[i + 1].x - pts[i].x;
+      m[i] = dx[i] === 0 ? 0 : (pts[i + 1].y - pts[i].y) / dx[i];
+    }
+    const tg = new Array(n);
+    tg[0] = m[0];
+    tg[n - 1] = m[n - 2];
+    for (let i = 1; i < n - 1; i++) {
+      if (m[i - 1] * m[i] <= 0) {
+        tg[i] = 0;                       // 极值点：切线水平
+      } else {
+        tg[i] = (m[i - 1] + m[i]) / 2;
       }
     }
+    for (let i = 0; i < n - 1; i++) {
+      if (m[i] === 0) {
+        tg[i] = 0; tg[i + 1] = 0;
+      } else {
+        const a = tg[i] / m[i];
+        const b = tg[i + 1] / m[i];
+        const s = a * a + b * b;
+        if (s > 9) {
+          const tau = 3 / Math.sqrt(s);
+          tg[i] = tau * a * m[i];
+          tg[i + 1] = tau * b * m[i];
+        }
+      }
+    }
+
+    function buildPath(){
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 0; i < n - 1; i++) {
+        if (dx[i] === 0) {
+          ctx.lineTo(pts[i + 1].x, pts[i + 1].y);
+        } else {
+          const c1x = pts[i].x + dx[i] / 3;
+          const c1y = pts[i].y + tg[i] * dx[i] / 3;
+          const c2x = pts[i + 1].x - dx[i] / 3;
+          const c2y = pts[i + 1].y - tg[i + 1] * dx[i] / 3;
+          ctx.bezierCurveTo(c1x, c1y, c2x, c2y, pts[i + 1].x, pts[i + 1].y);
+        }
+      }
+    }
+
     if(fillColor){
       ctx.save();
       ctx.beginPath();
@@ -915,7 +947,7 @@ function drawHistoryChart(canvas, history){
       ctx.clip();
       ctx.beginPath();
       buildPath();
-      ctx.lineTo(pts[pts.length-1].x, padT + ch);
+      ctx.lineTo(pts[pts.length - 1].x, padT + ch);
       ctx.lineTo(pts[0].x, padT + ch);
       ctx.closePath();
       const grad = ctx.createLinearGradient(0, padT, 0, padT + ch);
@@ -1606,23 +1638,55 @@ function drawShareHistory(ctx, x, y, w, h, history){
 
   function drawSmooth(getY, strokeColor, fillColor){
     const pts = points.map(p => ({ x: p.x, y: getY(p) }));
-    const tension = 0.35;
-    const getCP = i => {
-      if(i < 0) return pts[0];
-      if(i >= pts.length) return pts[pts.length - 1];
-      return pts[i];
-    };
-    function buildPath(){
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for(let i = 0; i < pts.length - 1; i++){
-        const p0 = getCP(i - 1), p1 = pts[i], p2 = pts[i + 1], p3 = getCP(i + 2);
-        const cp1x = p1.x + (p2.x - p0.x) / 6 * tension * 2;
-        const cp1y = p1.y + (p2.y - p0.y) / 6 * tension * 2;
-        const cp2x = p2.x - (p3.x - p1.x) / 6 * tension * 2;
-        const cp2y = p2.y - (p3.y - p1.y) / 6 * tension * 2;
-        ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+    const n = pts.length;
+    if (n < 2) return;
+
+    // —— 单调三次样条（Fritsch-Carlson），保证不过冲失真 ——
+    const dx = new Array(n - 1), m = new Array(n - 1);
+    for (let i = 0; i < n - 1; i++) {
+      dx[i] = pts[i + 1].x - pts[i].x;
+      m[i] = dx[i] === 0 ? 0 : (pts[i + 1].y - pts[i].y) / dx[i];
+    }
+    const tg = new Array(n);
+    tg[0] = m[0];
+    tg[n - 1] = m[n - 2];
+    for (let i = 1; i < n - 1; i++) {
+      if (m[i - 1] * m[i] <= 0) {
+        tg[i] = 0;
+      } else {
+        tg[i] = (m[i - 1] + m[i]) / 2;
       }
     }
+    for (let i = 0; i < n - 1; i++) {
+      if (m[i] === 0) {
+        tg[i] = 0; tg[i + 1] = 0;
+      } else {
+        const a = tg[i] / m[i];
+        const b = tg[i + 1] / m[i];
+        const s = a * a + b * b;
+        if (s > 9) {
+          const tau = 3 / Math.sqrt(s);
+          tg[i] = tau * a * m[i];
+          tg[i + 1] = tau * b * m[i];
+        }
+      }
+    }
+
+    function buildPath(){
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 0; i < n - 1; i++) {
+        if (dx[i] === 0) {
+          ctx.lineTo(pts[i + 1].x, pts[i + 1].y);
+        } else {
+          const c1x = pts[i].x + dx[i] / 3;
+          const c1y = pts[i].y + tg[i] * dx[i] / 3;
+          const c2x = pts[i + 1].x - dx[i] / 3;
+          const c2y = pts[i + 1].y - tg[i + 1] * dx[i] / 3;
+          ctx.bezierCurveTo(c1x, c1y, c2x, c2y, pts[i + 1].x, pts[i + 1].y);
+        }
+      }
+    }
+
     if(fillColor){
       ctx.save();
       ctx.beginPath();
@@ -1630,7 +1694,7 @@ function drawShareHistory(ctx, x, y, w, h, history){
       ctx.clip();
       ctx.beginPath();
       buildPath();
-      ctx.lineTo(pts[pts.length-1].x, cy + ch);
+      ctx.lineTo(pts[pts.length - 1].x, cy + ch);
       ctx.lineTo(pts[0].x, cy + ch);
       ctx.closePath();
       const grad = ctx.createLinearGradient(0, cy, 0, cy + ch);
