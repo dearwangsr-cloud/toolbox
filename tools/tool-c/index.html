@@ -534,7 +534,7 @@ function renderAccountEdit(id){
   const acc = state.accounts.find(a => a.id === id);
   if(!acc) return '';
   const isDetail = acc.mode === 'detail';
-  const hist = (acc.history || []).slice().sort((a,b) => a.date.localeCompare(b.date));
+  const hist = (acc.history || []).slice().sort((a,b) => b.date.localeCompare(a.date));
   const notes = (acc.notes || []).slice().sort((a,b) => a.date.localeCompare(b.date));
 
   // 历史：默认展开条件 = 该账户尚无手动折叠/展开记录 && 历史为空
